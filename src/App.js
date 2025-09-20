@@ -15,7 +15,7 @@ export default function App() {
     if (selectedFile) {
       setFile(selectedFile);
       alert(`Selected file: ${selectedFile.name}`);
-      // later: send this file to your Python backend
+      // later for backend
     }
   }
 
