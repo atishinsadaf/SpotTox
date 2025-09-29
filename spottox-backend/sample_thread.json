@@ -1,0 +1,16 @@
+{
+  "thread_id": "demo_001",
+  "platform": "forum",
+  "messages": [
+    {
+      "id": 1,
+      "user": "user123",
+      "content": "Hey everyone, what do you think about the new policy?"
+    },
+    {
+      "id": 2, 
+      "user": "angry_user",
+      "content": "This is stupid! Worst idea ever!"
+    }
+  ]
+}
