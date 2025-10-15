@@ -1,15 +1,22 @@
 import { useState, useEffect, useMemo } from "react";
 
 export default function App() {
-  const [count, setCount] = useState(0);
   const [now, setNow] = useState(() => new Date().toLocaleString());
-  const [file, setFile] = useState(null);
-
-  // recent uploads
+  const [files, setFiles] = useState([]); // Changed to array for multiple files
+  const [selectedModel, setSelectedModel] = useState("SpotToxBERT");
+  
+  // Recent uploads
   const [recent, setRecent] = useState([]);
   const [showRecent, setShowRecent] = useState(false);
 
-  // tagline list
+  // Available AI models
+  const availableModels = [
+    { id: "SpotToxBERT", name: "SpotTox BERT Model" },
+    { id: "perspective-api", name: "Google Perspective API" },
+    { id: "custom-nlp", name: "Custom NLP Model" }
+  ];
+
+  // Tagline list
   const taglines = useMemo(
     () => [
       "AI-powered early warning detection for toxic conversations.",
@@ -40,20 +47,17 @@ export default function App() {
   // Typing effect for taglines
   useEffect(() => {
     const full = taglines[tagIndex];
-    const speed = isDeleting ? 35 : 55; // typing speed
-    const donePause = 1000; // pause when a line finished
+    const speed = isDeleting ? 35 : 55;
+    const donePause = 1000;
 
     const tick = setTimeout(() => {
       if (!isDeleting) {
-        // typing forward
         const next = full.slice(0, typed.length + 1);
         setTyped(next);
         if (next === full) {
-          // pause then start deleting
           setTimeout(() => setIsDeleting(true), donePause);
         }
       } else {
-        // deleting
         const next = full.slice(0, typed.length - 1);
         setTyped(next);
         if (next.length === 0) {
@@ -66,53 +70,68 @@ export default function App() {
     return () => clearTimeout(tick);
   }, [typed, isDeleting, tagIndex, taglines]);
 
+  // Handle multiple file upload
   function handleUpload(e) {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      setRecent((prev) => {
-        const item = { name: selectedFile.name, time: new Date().toLocaleString() };
-        return [item, ...prev].slice(0, 5);
-      });
+    const selectedFiles = Array.from(e.target.files);
+    if (selectedFiles.length > 0) {
+      setFiles(selectedFiles);
+      
+      // Add to recent uploads
+      const newUploads = selectedFiles.map(file => ({
+        name: file.name,
+        time: new Date().toLocaleString(),
+        size: (file.size / 1024).toFixed(2) + " KB"
+      }));
+      
+      setRecent((prev) => [...newUploads, ...prev].slice(0, 10));
     }
+  }
+
+  // Remove individual file
+  function removeFile(index) {
+    setFiles(files.filter((_, i) => i !== index));
   }
 
   // Simulated analyze with progress bar
   function handleAnalyze() {
-    if (!file) return;
+    if (files.length === 0) {
+      alert("Please upload at least one CSV file!");
+      return;
+    }
+    
     setIsAnalyzing(true);
     setProgress(0);
     
     const interval = setInterval(() => {
       setProgress((p) => {
-        const inc = Math.random() * 18 + 7; // 7–25%
+        const inc = Math.random() * 15 + 5;
         const next = Math.min(100, Math.round(p + inc));
         if (next >= 100) {
           clearInterval(interval);
-          // small finish delay
           setTimeout(() => {
             setIsAnalyzing(false);
-            alert(`Analysis complete for "${file.name}" (connect to backend next).`);
+            alert(
+              `Analysis complete!\n\nFiles analyzed: ${files.length}\nModel used: ${selectedModel}\n\n(Backend integration pending)`
+            );
           }, 350);
         }
         return next;
       });
-    }, 350);
+    }, 400);
   }
 
   function handleCardMouseMove(e) {
     const rect = e.currentTarget.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    const dx = (e.clientX - cx) / (rect.width / 2);  // -1..1
-    const dy = (e.clientY - cy) / (rect.height / 2); // -1..1
-    setTilt({ x: dy * 6, y: -dx * 6 }); // rotateX by dy, rotateY by -dx
+    const dx = (e.clientX - cx) / (rect.width / 2);
+    const dy = (e.clientY - cy) / (rect.height / 2);
+    setTilt({ x: dy * 6, y: -dx * 6 });
   }
 
   function handleCardMouseLeave() {
     setTilt({ x: 0, y: 0 });
   }
-
 
   return (
     <div
@@ -121,20 +140,17 @@ export default function App() {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        height: "100vh",
-        overflow: "hidden",
+        minHeight: "100vh",
+        overflow: "auto",
         background: "linear-gradient(135deg, #000000, #111827, #1f2937, #000000)",
+        padding: "20px",
       }}
     >
-      {/* Floating particles */}
       <style>{`
-        @keyframes floatUp {
-          0% { transform: translateY(20vh); opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { transform: translateY(-120vh); opacity: 0; }
+        @keyframes fadeIn { 
+          from { opacity: 0; transform: translateY(6px);} 
+          to { opacity: 1; transform: translateY(0);} 
         }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
         @keyframes pulseShadow { 
           0% { box-shadow: 0 12px 30px rgba(0,0,0,0.5);} 
           50% { box-shadow: 0 16px 40px rgba(0,0,0,0.7);} 
@@ -168,8 +184,10 @@ export default function App() {
           0%, 50% { opacity: 1; }
           51%, 100% { opacity: 0; }
         }
+        @keyframes spin { 
+          to { transform: rotate(360deg); } 
+        }
       `}</style>
-
 
       <main
         onMouseMove={handleCardMouseMove}
@@ -181,8 +199,8 @@ export default function App() {
           background: "#111827",
           color: "white",
           textAlign: "center",
-          maxWidth: 520,
-          width: "90%",
+          maxWidth: 600,
+          width: "100%",
           transform: `perspective(800px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
           transition: "transform 120ms ease",
           boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
@@ -193,7 +211,6 @@ export default function App() {
           Welcome to <span className="gradient-text">SpotTox</span>
         </h1>
 
-        {/* Typing tagline */}
         <p
           style={{
             marginTop: 8,
@@ -211,6 +228,35 @@ export default function App() {
         <p style={{ color: "#d1d5db", marginBottom: 24 }}>
           Time: <strong>{now}</strong>
         </p>
+
+        {/* Model Selection Dropdown */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: "block", marginBottom: 8, color: "#e5e7eb", fontWeight: 600 }}>
+            Select AI Model:
+          </label>
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            style={{
+              padding: "10px 16px",
+              background: "#1f2937",
+              color: "white",
+              border: "2px solid #374151",
+              borderRadius: "8px",
+              fontSize: "14px",
+              fontWeight: 600,
+              cursor: "pointer",
+              width: "100%",
+              maxWidth: "300px",
+            }}
+          >
+            {availableModels.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* Upload + Recent button */}
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
@@ -237,10 +283,11 @@ export default function App() {
               e.currentTarget.style.boxShadow = "0 4px 10px rgba(0,0,0,0.5)";
             }}
           >
-            Upload Thread
+            Upload Thread(s)
             <input
               type="file"
-              accept=".txt,.json"
+              accept=".csv,.txt,.json"
+              multiple
               style={{ display: "none" }}
               onChange={handleUpload}
             />
@@ -262,82 +309,127 @@ export default function App() {
             onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
             onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
           >
-            Recently Uploaded Threads
+            Recent Uploads
           </button>
         </div>
 
-        {/* File uploaded info + Analyze */}
-        {file && (
-          <>
-            <p style={{ marginTop: 16, color: "#fca5a5" }}>
-              Uploaded: <strong>{file.name}</strong>
-            </p>
-
-            {/* Analyze button or progress */}
-            {!isAnalyzing ? (
-              <button
-                onClick={handleAnalyze}
-                style={{
-                  marginTop: 12,
-                  padding: "12px 20px",
-                  background: "linear-gradient(90deg, #16a34a, #22c55e)",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "12px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
-                  transition: "transform .15s ease",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-              >
-                Analyze Thread
-              </button>
-            ) : (
-              <div style={{ marginTop: 16 }}>
-                {/* Spinner */}
+        {/* Display uploaded files */}
+        {files.length > 0 && (
+          <div
+            style={{
+              marginTop: 20,
+              padding: 16,
+              background: "#1f2937",
+              borderRadius: 12,
+              textAlign: "left",
+            }}
+          >
+            <h3 style={{ color: "#f87171", marginTop: 0, marginBottom: 12, fontSize: 16 }}>
+              Uploaded Files ({files.length})
+            </h3>
+            <div style={{ maxHeight: 200, overflowY: "auto" }}>
+              {files.map((file, index) => (
                 <div
+                  key={index}
                   style={{
-                    margin: "0 auto 10px",
-                    width: 28,
-                    height: 28,
-                    borderRadius: "50%",
-                    border: "3px solid rgba(255,255,255,0.2)",
-                    borderTopColor: "#22c55e",
-                    animation: "spin 0.9s linear infinite",
-                  }}
-                />
-                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-
-                {/* Progress bar */}
-                <div
-                  style={{
-                    width: 280,
-                    maxWidth: "90%",
-                    height: 10,
-                    background: "#0f172a",
-                    borderRadius: 999,
-                    overflow: "hidden",
-                    margin: "0 auto",
-                    boxShadow: "inset 0 0 6px rgba(0,0,0,0.6)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "8px 12px",
+                    background: "#111827",
+                    borderRadius: 8,
+                    marginBottom: 8,
                   }}
                 >
-                  <div
+                  <div>
+                    <div style={{ fontWeight: 600, color: "#e5e7eb" }}>{file.name}</div>
+                    <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                      {(file.size / 1024).toFixed(2)} KB
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeFile(index)}
                     style={{
-                      width: `${progress}%`,
-                      height: "100%",
-                      background: "linear-gradient(90deg, #16a34a, #22c55e)",
-                      transition: "width 220ms ease",
+                      padding: "6px 12px",
+                      background: "#dc2626",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      fontWeight: 600,
                     }}
-                  />
+                  >
+                    Remove
+                  </button>
                 </div>
-                <div style={{ marginTop: 8, color: "#9ca3af", fontSize: 12 }}>
-                  Analyzing… {progress}%
-                </div>
-              </div>
-            )}
-          </>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Analyze button or progress */}
+        {files.length > 0 && !isAnalyzing && (
+          <button
+            onClick={handleAnalyze}
+            style={{
+              marginTop: 16,
+              padding: "14px 24px",
+              background: "linear-gradient(90deg, #16a34a, #22c55e)",
+              color: "white",
+              border: "none",
+              borderRadius: "12px",
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
+              transition: "transform .15s ease",
+              fontSize: 16,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+          >
+            Analyze {files.length} Thread{files.length > 1 ? "s" : ""} with {selectedModel}
+          </button>
+        )}
+
+        {isAnalyzing && (
+          <div style={{ marginTop: 16 }}>
+            <div
+              style={{
+                margin: "0 auto 10px",
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                border: "3px solid rgba(255,255,255,0.2)",
+                borderTopColor: "#22c55e",
+                animation: "spin 0.9s linear infinite",
+              }}
+            />
+            <div
+              style={{
+                width: "100%",
+                maxWidth: 300,
+                height: 10,
+                background: "#0f172a",
+                borderRadius: 999,
+                overflow: "hidden",
+                margin: "0 auto",
+                boxShadow: "inset 0 0 6px rgba(0,0,0,0.6)",
+              }}
+            >
+              <div
+                style={{
+                  width: `${progress}%`,
+                  height: "100%",
+                  background: "linear-gradient(90deg, #16a34a, #22c55e)",
+                  transition: "width 220ms ease",
+                }}
+              />
+            </div>
+            <div style={{ marginTop: 8, color: "#9ca3af", fontSize: 12 }}>
+              Analyzing {files.length} file{files.length > 1 ? "s" : ""}... {progress}%
+            </div>
+          </div>
         )}
 
         {/* Recent uploads panel */}
@@ -349,25 +441,27 @@ export default function App() {
               borderRadius: 10,
               background: "#1f2937",
               textAlign: "left",
-              maxHeight: 160,
+              maxHeight: 200,
               overflowY: "auto",
               animation: "fadeIn .3s ease",
             }}
           >
             <div style={{ fontWeight: 700, marginBottom: 8, color: "#f87171" }}>
-              Recent uploads
+              Recent Uploads
             </div>
             {recent.length === 0 ? (
               <div style={{ color: "#9ca3af" }}>No uploads yet.</div>
             ) : (
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
+              <div>
                 {recent.map((r, i) => (
-                  <li key={i} style={{ marginBottom: 6, color: "#e5e7eb" }}>
+                  <div key={i} style={{ marginBottom: 6, color: "#e5e7eb", fontSize: 13 }}>
                     <span style={{ fontWeight: 600 }}>{r.name}</span>
-                    <span style={{ color: "#9ca3af" }}> — {r.time}</span>
-                  </li>
+                    <div style={{ color: "#9ca3af", fontSize: 11 }}>
+                      {r.time} • {r.size}
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
         )}

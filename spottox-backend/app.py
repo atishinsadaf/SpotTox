@@ -10,7 +10,7 @@ CORS(app)  # Enable cross-origin requests from React frontend
 
 # Configuration
 UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'txt', 'json'}
+ALLOWED_EXTENSIONS = {'txt', 'json', 'csv'}  # Added CSV support
 
 # Create uploads directory if it doesn't exist
 if not os.path.exists(UPLOAD_FOLDER):
@@ -68,7 +68,8 @@ def home():
         'endpoints': {
             'GET /': 'API information (this page)',
             'GET /health': 'Health check',
-            'POST /upload': 'Upload thread file for analysis',
+            'POST /upload': 'Upload single thread file for analysis',
+            'POST /upload-multiple': 'Upload multiple thread files',
             'GET /threads': 'List all uploaded threads',
             'POST /analyze': 'Analyze thread for toxicity (placeholder)'
         },
@@ -143,6 +144,75 @@ def upload_thread():
             'allowed_types': list(ALLOWED_EXTENSIONS),
             'received_filename': file.filename
         }), 400
+
+# ============ NEW ENDPOINT FOR MULTIPLE FILE UPLOAD ============
+@app.route('/upload-multiple', methods=['POST'])
+def upload_multiple():
+    """Handle multiple thread file uploads from React frontend."""
+    print("Multiple upload request received")
+    
+    # Check if files were included in request
+    if 'files' not in request.files:
+        print("No files in request")
+        return jsonify({'error': 'No files provided in request'}), 400
+    
+    files = request.files.getlist('files')
+    print(f"Number of files received: {len(files)}")
+    
+    if len(files) == 0:
+        return jsonify({'error': 'No files selected'}), 400
+    
+    uploaded_files = []
+    failed_files = []
+    
+    for file in files:
+        if file.filename == '':
+            continue
+            
+        if file and allowed_file(file.filename):
+            try:
+                # Save file to uploads directory
+                filename = file.filename
+                file_path = os.path.join(UPLOAD_FOLDER, filename)
+                file.save(file_path)
+                print(f"File saved: {filename}")
+                
+                # Read and parse the uploaded file
+                result = read_thread_file(file_path)
+                
+                if result['success']:
+                    uploaded_files.append({
+                        'filename': filename,
+                        'file_info': result
+                    })
+                else:
+                    failed_files.append({
+                        'filename': filename,
+                        'error': result['error']
+                    })
+                    
+            except Exception as e:
+                print(f"Upload error for {file.filename}: {str(e)}")
+                failed_files.append({
+                    'filename': file.filename,
+                    'error': str(e)
+                })
+        else:
+            print(f"Invalid file type: {file.filename}")
+            failed_files.append({
+                'filename': file.filename,
+                'error': 'Invalid file type'
+            })
+    
+    return jsonify({
+        'message': f'{len(uploaded_files)} file(s) uploaded successfully',
+        'uploaded_count': len(uploaded_files),
+        'failed_count': len(failed_files),
+        'uploaded_files': uploaded_files,
+        'failed_files': failed_files,
+        'timestamp': datetime.now().isoformat()
+    }), 200 if len(uploaded_files) > 0 else 400
+# ============ END OF NEW ENDPOINT ============
 
 @app.route('/threads', methods=['GET'])
 def list_threads():
