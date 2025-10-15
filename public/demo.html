@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SpotTox Demo (Static)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 1.5rem; }
+    .btn { background: #2563eb; color: #fff; border: 0; padding: .6rem 1rem; border-radius: .5rem; cursor: pointer; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1rem; }
+    pre { background: #f3f4f6; padding: 1rem; border-radius: .5rem; overflow: auto; }
+    @media (max-width: 900px){ .row { grid-template-columns: 1fr; } }
+  </style>
+  <!-- Chart.js from CDN (no installs needed) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <h1>SpotTox Demo</h1>
+  <button class="btn" id="runBtn">Run Demo</button>
+
+  <div class="row">
+    <div>
+      <h2>JSON Output</h2>
+      <pre id="jsonBox">{ /* click “Run Demo” */ }</pre>
+    </div>
+    <div>
+      <h2>Avg Toxicity per User</h2>
+      <canvas id="chartCanvas" height="200"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const runBtn = document.getElementById("runBtn");
+    const jsonBox = document.getElementById("jsonBox");
+    const ctx = document.getElementById("chartCanvas").getContext("2d");
+    let chart;
+
+    function fakeData() {
+      const msgs = [
+        { user: "Alice", text: "Hello!", score: 0.10 },
+        { user: "Bob",   text: "This sucks", score: 0.80 },
+        { user: "Eve",   text: "Nice work",  score: 0.05 },
+        { user: "Bob",   text: "You’re dumb", score: 0.90 },
+        { user: "Alice", text: "Calm down",   score: 0.30 }
+      ];
+      const scores = msgs.map(m => m.score);
+      const avg = scores.reduce((a,b)=>a+b,0) / scores.length;
+
+      // group by user (simple)
+      const byUserMap = {};
+      for (const m of msgs) {
+        byUserMap[m.user] ??= [];
+        byUserMap[m.user].push(m.score);
+      }
+      const byUser = Object.entries(byUserMap).map(([user, arr]) => ({
+        user,
+        avg_score: Number((arr.reduce((a,b)=>a+b,0) / arr.length).toFixed(2)),
+        message_count: arr.length
+      }));
+
+      const jsonResult = {
+        summary: {
+          message_count: msgs.length,
+          avg_toxicity: Number(avg.toFixed(2)),
+          max_toxicity: Number(Math.max(...scores).toFixed(2)),
+          min_toxicity: Number(Math.min(...scores).toFixed(2))
+        },
+        by_user: byUser,
+        top_messages: [...msgs].sort((a,b)=>b.score-a.score).slice(0,3)
+      };
+      return { jsonResult, msgs };
+    }
+
+    function drawChart(byUser) {
+      const labels = byUser.map(u => u.user);
+      const data = byUser.map(u => u.avg_score);
+
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{ label: "Avg Toxicity (0–1)", data }]
+        },
+        options: {
+          scales: { y: { beginAtZero: true, max: 1 } },
+          plugins: { legend: { display: true } }
+        }
+      });
+    }
+
+    runBtn.addEventListener("click", () => {
+      const { jsonResult } = fakeData();
+      jsonBox.textContent = JSON.stringify(jsonResult, null, 2);
+      drawChart(jsonResult.by_user);
+    });
+  </script>
+</body>
+</html>
