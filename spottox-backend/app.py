@@ -4,279 +4,339 @@ from flask_cors import CORS
 import json
 import os
 from datetime import datetime
+import torch
+import numpy as np
+import pandas as pd
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-app = Flask(__name__)
-CORS(app)  # Enable cross-origin requests from React frontend
+# ---------------------------------------------------------------------
+# Paths and configuration
+# ---------------------------------------------------------------------
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
+ALLOWED_EXTENSIONS = {"txt", "json", "csv"}
+CANONICAL_MODEL_NAME = "SpotToxBERT"
+CANONICAL_MODEL_DIR = os.path.join(BASE_DIR, CANONICAL_MODEL_NAME)
 
-# Configuration
-UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'txt', 'json', 'csv'}  # Added CSV support
-
-# Create uploads directory if it doesn't exist
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-    print(f"Created upload folder: {UPLOAD_FOLDER}")
-
+# ---------------------------------------------------------------------
+# Utility functions
+# ---------------------------------------------------------------------
 def allowed_file(filename):
-    """Check if uploaded file has allowed extension."""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def resolve_model_dir(name_or_path):
+    if not name_or_path or name_or_path == CANONICAL_MODEL_NAME:
+        return CANONICAL_MODEL_DIR
+    candidate = name_or_path
+    if not os.path.isabs(candidate):
+        candidate = os.path.join(BASE_DIR, candidate)
+    return os.path.abspath(candidate)
+
+def model_dir_has_model(model_dir):
+    return os.path.isdir(model_dir) and os.path.exists(os.path.join(model_dir, "config.json"))
+
+def load_spottoxbert(model_dir):
+    tok = AutoTokenizer.from_pretrained(model_dir)
+    mdl = AutoModelForSequenceClassification.from_pretrained(model_dir)
+    mdl.eval()
+    return tok, mdl
+
+def to_device(batch, device):
+    return {k: v.to(device) for k, v in batch.items() if hasattr(v, "to")}
+
+def score_texts(tok, mdl, texts, max_length=256, batch_size=32):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    mdl.to(device)
+    scores = []
+    for i in range(0, len(texts), batch_size):
+        chunk = texts[i : i + batch_size]
+        enc = tok(chunk, return_tensors="pt", truncation=True, padding=True, max_length=max_length)
+        enc = to_device(enc, device)
+        with torch.no_grad():
+            logits = mdl(**enc).logits.squeeze(-1).detach().cpu().numpy()
+        scores.extend(np.clip(logits, 0.0, 1.0))
+    return np.array(scores, dtype=float)
 
 def read_thread_file(file_path):
-    """
-    Read and parse thread file content.
-    Handles both JSON and plain text files.
-    """
     try:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            content = file.read()
-            
-        # Try to parse as JSON first
-        try:
-            thread_data = json.loads(content)
-            file_type = 'json'
-            print(f"Successfully parsed JSON file")
-        except json.JSONDecodeError:
-            # If not JSON, treat as plain text
-            thread_data = content.split('\n')
-            file_type = 'txt'
-            print(f"Parsed as text file with {len(thread_data)} lines")
-            
-        return {
-            'success': True,
-            'file_type': file_type,
-            'content': thread_data,
-            'message_count': len(thread_data) if isinstance(thread_data, list) else 1,
-            'timestamp': datetime.now().isoformat(),
-            'file_size_bytes': os.path.getsize(file_path)
-        }
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext == ".json":
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = json.load(f)
+            return {
+                "success": True,
+                "file_type": "json",
+                "content": content if isinstance(content, (dict, list)) else str(content)[:5000],
+                "message_count": len(content) if isinstance(content, list) else 1,
+                "timestamp": datetime.now().isoformat(),
+                "file_size_bytes": os.path.getsize(file_path),
+            }
+        elif ext == ".txt":
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.read().splitlines()
+            return {
+                "success": True,
+                "file_type": "txt",
+                "content": lines[:200],
+                "message_count": len(lines),
+                "timestamp": datetime.now().isoformat(),
+                "file_size_bytes": os.path.getsize(file_path),
+            }
+        elif ext == ".csv":
+            df_head = pd.read_csv(file_path, nrows=10)
+            preview_rows = (
+                df_head.replace({np.nan: None})
+                .astype(object)
+                .where(pd.notnull(df_head), None)
+                .to_dict(orient="records")
+            )
+            return {
+                "success": True,
+                "file_type": "csv",
+                "columns": list(df_head.columns),
+                "preview_rows": preview_rows,
+                "message_count": len(df_head),
+                "timestamp": datetime.now().isoformat(),
+                "file_size_bytes": os.path.getsize(file_path),
+            }
+        return {"success": False, "error": f"Unsupported file type: {ext}", "timestamp": datetime.now().isoformat()}
     except Exception as e:
-        print(f"Error reading file {file_path}: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
-@app.route('/', methods=['GET'])
+# ---------------------------------------------------------------------
+# Flask app initialization
+# ---------------------------------------------------------------------
+app = Flask(__name__)
+CORS(
+    app,
+    resources={r"/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000",
+                                   "http://localhost:5173", "http://127.0.0.1:5173"]}},
+    supports_credentials=False,
+    max_age=86400,
+)
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# ---------------------------------------------------------------------
+# Model preload
+# ---------------------------------------------------------------------
+default_tok, default_mdl = None, None
+if model_dir_has_model(CANONICAL_MODEL_DIR):
+    try:
+        default_tok, default_mdl = load_spottoxbert(CANONICAL_MODEL_DIR)
+        print(f"Loaded canonical model: {CANONICAL_MODEL_DIR}")
+    except Exception as e:
+        print(f"Could not load canonical model: {e}")
+else:
+    print(f"Canonical model not found at: {CANONICAL_MODEL_DIR}")
+
+# ---------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------
+@app.get("/")
 def home():
-    """API Home page - shows available endpoints."""
     return jsonify({
-        'message': 'SpotTox Backend API - Thread Toxicity Detection System',
-        'version': '1.0.0',
-        'status': 'running',
-        'endpoints': {
-            'GET /': 'API information (this page)',
-            'GET /health': 'Health check',
-            'POST /upload': 'Upload single thread file for analysis',
-            'POST /upload-multiple': 'Upload multiple thread files',
-            'GET /threads': 'List all uploaded threads',
-            'POST /analyze': 'Analyze thread for toxicity (placeholder)'
-        },
-        'supported_formats': list(ALLOWED_EXTENSIONS),
-        'upload_folder': UPLOAD_FOLDER
+        "message": "SpotTox Backend API - Thread Toxicity Detection System",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "GET /": "API information",
+            "GET /health": "Health check",
+            "POST /upload": "Upload file",
+            "POST /upload-multiple": "Upload multiple files",
+            "GET /threads": "List uploaded files",
+            "GET /models": "List models",
+            "POST /analyze-text": "Analyze single text",
+            "POST /analyze-file": "Analyze one CSV",
+            "POST /analyze-multiple": "Analyze multiple CSVs side-by-side",
+        }
     })
 
-@app.route('/health', methods=['GET'])
+@app.get("/health")
 def health_check():
-    """Health check endpoint."""
     return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'service': 'SpotTox Backend'
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "SpotTox Backend",
+        "has_model": model_dir_has_model(CANONICAL_MODEL_DIR),
     })
 
-@app.route('/upload', methods=['POST'])
+# ---------------------------------------------------------------------
+# Upload routes
+# ---------------------------------------------------------------------
+@app.post("/upload")
 def upload_thread():
-    """Handle thread file uploads from React frontend."""
-    print("Upload request received")
-    
-    # Check if file was included in request
-    if 'file' not in request.files:
-        print("No file in request")
-        return jsonify({'error': 'No file provided in request'}), 400
-    
-    file = request.files['file']
-    print(f"File received: {file.filename}")
-    
-    # Validate file selection
-    if file.filename == '':
-        print("Empty filename")
-        return jsonify({'error': 'No file selected'}), 400
-    
-    # Check file type
-    if file and allowed_file(file.filename):
-        try:
-            # Save file to uploads directory
-            filename = file.filename
-            file_path = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(file_path)
-            print(f"File saved to: {file_path}")
-            
-            # Read and parse the uploaded file
-            result = read_thread_file(file_path)
-            
-            if result['success']:
-                print(f"Successfully processed {filename}")
-                return jsonify({
-                    'message': f'File "{filename}" uploaded and processed successfully',
-                    'filename': filename,
-                    'file_info': result,
-                    'next_steps': 'Ready for toxicity analysis (not implemented yet)'
-                }), 200
-            else:
-                print(f"Failed to process {filename}: {result['error']}")
-                return jsonify({
-                    'error': f'Failed to process file: {result["error"]}',
-                    'filename': filename
-                }), 500
-                
-        except Exception as e:
-            print(f"Upload error: {str(e)}")
-            return jsonify({
-                'error': f'Upload failed: {str(e)}',
-                'filename': file.filename
-            }), 500
-    else:
-        print(f"Invalid file type: {file.filename}")
-        return jsonify({
-            'error': 'Invalid file type',
-            'allowed_types': list(ALLOWED_EXTENSIONS),
-            'received_filename': file.filename
-        }), 400
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    file = request.files["file"]
+    if not file or file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+    if not allowed_file(file.filename):
+        return jsonify({"error": "Invalid file type", "allowed": list(ALLOWED_EXTENSIONS)}), 400
+    try:
+        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(filepath)
+        result = read_thread_file(filepath)
+        return jsonify({"filename": file.filename, "file_info": result}), 200
+    except Exception as e:
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
 
-# ============ NEW ENDPOINT FOR MULTIPLE FILE UPLOAD ============
-@app.route('/upload-multiple', methods=['POST'])
+@app.post("/upload-multiple")
 def upload_multiple():
-    """Handle multiple thread file uploads from React frontend."""
-    print("Multiple upload request received")
-    
-    # Check if files were included in request
-    if 'files' not in request.files:
-        print("No files in request")
-        return jsonify({'error': 'No files provided in request'}), 400
-    
-    files = request.files.getlist('files')
-    print(f"Number of files received: {len(files)}")
-    
-    if len(files) == 0:
-        return jsonify({'error': 'No files selected'}), 400
-    
-    uploaded_files = []
-    failed_files = []
-    
+    if "files" not in request.files:
+        return jsonify({"error": "No files provided"}), 400
+    files = request.files.getlist("files")
+    uploaded, failed = [], []
     for file in files:
-        if file.filename == '':
+        if file.filename == "":
             continue
-            
-        if file and allowed_file(file.filename):
-            try:
-                # Save file to uploads directory
-                filename = file.filename
-                file_path = os.path.join(UPLOAD_FOLDER, filename)
-                file.save(file_path)
-                print(f"File saved: {filename}")
-                
-                # Read and parse the uploaded file
-                result = read_thread_file(file_path)
-                
-                if result['success']:
-                    uploaded_files.append({
-                        'filename': filename,
-                        'file_info': result
-                    })
-                else:
-                    failed_files.append({
-                        'filename': filename,
-                        'error': result['error']
-                    })
-                    
-            except Exception as e:
-                print(f"Upload error for {file.filename}: {str(e)}")
-                failed_files.append({
-                    'filename': file.filename,
-                    'error': str(e)
-                })
-        else:
-            print(f"Invalid file type: {file.filename}")
-            failed_files.append({
-                'filename': file.filename,
-                'error': 'Invalid file type'
-            })
-    
+        if not allowed_file(file.filename):
+            failed.append({"filename": file.filename, "error": "Invalid file type"})
+            continue
+        try:
+            path = os.path.join(UPLOAD_FOLDER, file.filename)
+            file.save(path)
+            result = read_thread_file(path)
+            if result.get("success"):
+                uploaded.append({"filename": file.filename, "file_info": result})
+            else:
+                failed.append({"filename": file.filename, "error": result.get("error")})
+        except Exception as e:
+            failed.append({"filename": file.filename, "error": str(e)})
     return jsonify({
-        'message': f'{len(uploaded_files)} file(s) uploaded successfully',
-        'uploaded_count': len(uploaded_files),
-        'failed_count': len(failed_files),
-        'uploaded_files': uploaded_files,
-        'failed_files': failed_files,
-        'timestamp': datetime.now().isoformat()
-    }), 200 if len(uploaded_files) > 0 else 400
-# ============ END OF NEW ENDPOINT ============
+        "message": f"{len(uploaded)} file(s) uploaded successfully",
+        "uploaded": uploaded,
+        "failed": failed,
+        "timestamp": datetime.now().isoformat(),
+    }), (200 if uploaded else 400)
 
-@app.route('/threads', methods=['GET'])
+# ---------------------------------------------------------------------
+# Data listing routes
+# ---------------------------------------------------------------------
+@app.get("/threads")
 def list_threads():
-    """List all uploaded thread files with metadata."""
     try:
         files = []
-        if os.path.exists(UPLOAD_FOLDER):
-            for filename in os.listdir(UPLOAD_FOLDER):
-                if allowed_file(filename):
-                    file_path = os.path.join(UPLOAD_FOLDER, filename)
-                    file_stats = os.stat(file_path)
-                    files.append({
-                        'filename': filename,
-                        'size_bytes': file_stats.st_size,
-                        'size_kb': round(file_stats.st_size / 1024, 2),
-                        'uploaded': datetime.fromtimestamp(file_stats.st_mtime).isoformat(),
-                        'file_type': filename.split('.')[-1].lower()
-                    })
-        
-        return jsonify({
-            'threads': sorted(files, key=lambda x: x['uploaded'], reverse=True),
-            'total_count': len(files),
-            'upload_folder': UPLOAD_FOLDER,
-            'timestamp': datetime.now().isoformat()
-        })
+        for fname in os.listdir(UPLOAD_FOLDER):
+            if allowed_file(fname):
+                fpath = os.path.join(UPLOAD_FOLDER, fname)
+                st = os.stat(fpath)
+                files.append({
+                    "filename": fname,
+                    "size_kb": round(st.st_size / 1024, 2),
+                    "uploaded": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                    "file_type": fname.split(".")[-1],
+                })
+        return jsonify({"threads": sorted(files, key=lambda x: x["uploaded"], reverse=True)})
     except Exception as e:
-        print(f"Error listing threads: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/analyze', methods=['POST'])
-def analyze_thread():
-    """Placeholder endpoint for future toxicity analysis."""
+@app.get("/models")
+def list_models():
+    if model_dir_has_model(CANONICAL_MODEL_DIR):
+        return jsonify({"models": [CANONICAL_MODEL_NAME], "default": CANONICAL_MODEL_NAME})
+    return jsonify({"models": [], "default": None})
+
+# ---------------------------------------------------------------------
+# Analysis routes
+# ---------------------------------------------------------------------
+@app.post("/analyze-file")
+def analyze_file():
     try:
-        data = request.get_json()
-        filename = data.get('filename', 'unknown') if data else 'unknown'
-        
-        print(f"Analysis requested for: {filename}")
-        
-        # Mock response for demonstration
+        data = request.get_json(force=True)
+        filename = data.get("filename")
+        text_col = data.get("text_col", "txt")
+        model_dir = data.get("model_dir")
+        if not filename:
+            return jsonify({"error": "Missing 'filename'"}), 400
+        path = os.path.join(UPLOAD_FOLDER, filename)
+        if not os.path.exists(path):
+            return jsonify({"error": f"File not found: {filename}"}), 404
+        if not filename.endswith(".csv"):
+            return jsonify({"error": "Only CSV supported"}), 400
+        tok, mdl = (load_spottoxbert(model_dir) if model_dir else (default_tok, default_mdl))
+        df = pd.read_csv(path)
+        if text_col not in df.columns:
+            return jsonify({"error": f"Column '{text_col}' not found"}), 400
+        texts = df[text_col].fillna("").astype(str).tolist()
+        scores = score_texts(tok, mdl, texts)
+        mean, p90, p95, maxv = map(float, [scores.mean(), np.quantile(scores, 0.9), np.quantile(scores, 0.95), scores.max()])
+        bins = np.linspace(0, 1, 11)
+        hist, edges = np.histogram(scores, bins=bins)
+        top_k = np.argsort(-scores)[:10]
+        flagged = [{"row": int(i), "text": texts[i][:200], "score": float(scores[i])} for i in top_k]
         return jsonify({
-            'message': f'Analysis initiated for "{filename}"',
-            'status': 'processing',
-            'analysis_type': 'toxicity_detection',
-            'estimated_time': '30-60 seconds',
-            'note': 'This is a placeholder response. ML processing will be implemented in future milestones.',
-            'timestamp': datetime.now().isoformat(),
-            'mock_results': {
-                'toxicity_score': 0.23,
-                'confidence': 0.85,
-                'flagged_messages': 1
-            }
+            "filename": filename,
+            "summary": {"mean": mean, "p90": p90, "p95": p95, "max": maxv},
+            "histogram": {"counts": hist.tolist(), "edges": edges.tolist()},
+            "top_flagged": flagged,
+            "timestamp": datetime.now().isoformat(),
         })
     except Exception as e:
-        print(f"Analysis error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-if __name__ == '__main__':
-    print("="*50)
-    print("🚀 Starting SpotTox Backend Server")
-    print("="*50)
-    print(f"📁 Upload folder: {UPLOAD_FOLDER}")
-    print(f"📄 Allowed file types: {ALLOWED_EXTENSIONS}")
-    print(f"🌐 Server will run on: http://localhost:5001")
-    print(f"🔍 Health check: http://localhost:5001/health")
-    print("="*50)
-    
-    app.run(debug=True, host='0.0.0.0', port=5001)
+@app.post("/analyze-multiple")
+def analyze_multiple():
+    try:
+        data = request.get_json(force=True)
+        files = data.get("filenames", [])
+        text_col = data.get("text_col", "txt")
+        model_dir = data.get("model_dir")
+        if not files:
+            return jsonify({"error": "Missing 'filenames' list"}), 400
+        tok, mdl = (load_spottoxbert(model_dir) if model_dir else (default_tok, default_mdl))
+        results = []
+        for fname in files:
+            path = os.path.join(UPLOAD_FOLDER, fname)
+            if not os.path.exists(path):
+                results.append({"filename": fname, "error": "File not found"})
+                continue
+            try:
+                df = pd.read_csv(path)
+                if text_col not in df.columns:
+                    results.append({"filename": fname, "error": f"Missing column '{text_col}'"})
+                    continue
+                texts = df[text_col].fillna("").astype(str).tolist()
+                scores = score_texts(tok, mdl, texts)
+                mean, p90, p95, maxv = map(float, [scores.mean(), np.quantile(scores, 0.9), np.quantile(scores, 0.95), scores.max()])
+                bins = np.linspace(0, 1, 11)
+                hist, edges = np.histogram(scores, bins=bins)
+                results.append({
+                    "filename": fname,
+                    "rows": len(texts),
+                    "summary": {"mean": mean, "p90": p90, "p95": p95, "max": maxv},
+                    "histogram": {"counts": hist.tolist(), "edges": edges.tolist()},
+                })
+            except Exception as e:
+                results.append({"filename": fname, "error": str(e)})
+        return jsonify({"results": results, "timestamp": datetime.now().isoformat()}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.post("/analyze-text")
+def analyze_text():
+    try:
+        data = request.get_json(force=True)
+        text = (data.get("text") or "").strip()
+        if not text:
+            return jsonify({"error": "Missing 'text'"}), 400
+        tok, mdl = (default_tok, default_mdl)
+        scores = score_texts(tok, mdl, [text])
+        return jsonify({"text": text, "toxicity_score": float(scores[0])})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ---------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------
+if __name__ == "__main__":
+    print("=" * 60)
+    print("Starting SpotTox Backend Server")
+    print("=" * 60)
+    print(f"Upload folder: {UPLOAD_FOLDER}")
+    print(f"Allowed file types: {ALLOWED_EXTENSIONS}")
+    print(f"Canonical model: {CANONICAL_MODEL_DIR}")
+    print(f"Running on: http://localhost:5001")
+    print(f"Health check: http://localhost:5001/health")
+    print("=" * 60)
+    app.run(debug=True, host="0.0.0.0", port=5001)
