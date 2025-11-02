@@ -112,15 +112,16 @@ def train_roberta():
         compute_metrics=compute_metrics,
     )
 
-    print("\n🚀 Training SpotTox RoBERTa...\n")
+    print("\nTraining SpotTox RoBERTa...\n")
     trainer.train()
 
-    print("\n📊 Final Test:")
+    print("\nFinal Test:")
     print(trainer.evaluate(dataset["test"]))
 
     trainer.save_model(SAVE_DIR)
     tok.save_pretrained(SAVE_DIR)
-    print(f"\n✅ Model saved to {SAVE_DIR}")
+    print(f"\nModel saved to {SAVE_DIR}")
 
 if __name__ == "__main__":
     train_roberta()
+
