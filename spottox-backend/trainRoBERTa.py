@@ -31,7 +31,7 @@ def load_data():
         # normalize scores to 0-1
         df["labels"] = (df["labels"] - df["labels"].min()) / (df["labels"].max() - df["labels"].min())
         dfs.append(df[["txt", "labels"]])
-        print(f"✓ Loaded {f} with {len(df)} rows")
+        print(f"Loaded {f} with {len(df)} rows")
     full = pd.concat(dfs, ignore_index=True)
     print(f"Total rows: {len(full)}")
     return full.rename(columns={"txt": "text"})
@@ -124,4 +124,5 @@ def train_roberta():
 
 if __name__ == "__main__":
     train_roberta()
+
 
