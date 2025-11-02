@@ -11,7 +11,7 @@ from transformers import (
 )
 import warnings
 
-OUT_DIR = Path("SpotToxBERT")   # single model export
+OUT_DIR = Path("models/SpotToxBERT")
 BASE_MODEL = "bert-base-uncased"
 SEED = 42
 
