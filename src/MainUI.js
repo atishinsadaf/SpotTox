@@ -35,7 +35,8 @@ export default function MainUI({
   binDetail,
   setBinDetail,
 
-  // ✅ MODEL SELECTION
+  // MODEL SELECTION
+  models,
   selectedModel,
   setSelectedModel,
   modelName
@@ -93,7 +94,8 @@ export default function MainUI({
         alignItems: "center",
         height: "100vh",
         overflow: "hidden",
-        background: "linear-gradient(135deg, #000000, #111827, #1f2937, #000000)",
+        background:
+          "linear-gradient(135deg, #000000, #111827, #1f2937, #000000)",
       }}
     >
       <style>{`
@@ -141,7 +143,9 @@ export default function MainUI({
               padding: 10,
             }}
           >
-            <div style={{ fontWeight: 800, color: "#f87171", marginBottom: 8 }}>
+            <div
+              style={{ fontWeight: 800, color: "#f87171", marginBottom: 8 }}
+            >
               Recent uploads
             </div>
 
@@ -169,7 +173,11 @@ export default function MainUI({
                     }}
                   >
                     <span>{r.name}</span>
-                    <span style={{ color: "#9ca3af", fontSize: 12 }}>{r.time}</span>
+                    <span
+                      style={{ color: "#9ca3af", fontSize: 12 }}
+                    >
+                      {r.time}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -196,17 +204,27 @@ export default function MainUI({
           Welcome to <span className="gradient-text">SpotTox</span>
         </h1>
 
-        <p style={{ marginTop: 8, color: "#9ca3af", fontStyle: "italic", minHeight: "1.4em" }}>
-          {typed}<span className="caret" style={{ color: "#9ca3af" }} />
+        <p
+          style={{
+            marginTop: 8,
+            color: "#9ca3af",
+            fontStyle: "italic",
+            minHeight: "1.4em",
+          }}
+        >
+          {typed}
+          <span className="caret" style={{ color: "#9ca3af" }} />
         </p>
 
         <p style={{ color: "#d1d5db", marginBottom: 10 }}>
           Time & Date: <strong>{now}</strong>
         </p>
 
-        {/* ✅ MODEL DROPDOWN */}
+        {/* MODEL DROPDOWN (Dynamic from backend) */}
         <div style={{ marginBottom: 20 }}>
-          <label style={{ color: "#9ca3af", marginRight: 8, fontWeight: 600 }}>
+          <label
+            style={{ color: "#9ca3af", marginRight: 8, fontWeight: 600 }}
+          >
             Model:
           </label>
           <select
@@ -223,8 +241,15 @@ export default function MainUI({
               boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
             }}
           >
-            <option value="SpotToxBERT">SpotToxBERT</option>
-            <option value="SpotToxRoBERTa">SpotToxRoBERTa</option>
+            {models?.length > 0 ? (
+              models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))
+            ) : (
+              <option value="">Loading models...</option>
+            )}
           </select>
         </div>
 
@@ -232,17 +257,30 @@ export default function MainUI({
         <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
           <label style={btn("red")}>
             Upload Thread
-            <input type="file" accept=".csv,.txt,.json" style={{ display: "none" }} onChange={handleUpload} />
+            <input
+              type="file"
+              accept=".csv,.txt,.json"
+              style={{ display: "none" }}
+              onChange={handleUpload}
+            />
           </label>
 
           <label style={btn("blue")}>
             Upload Multiple
-            <input type="file" accept=".csv,.txt,.json" multiple style={{ display: "none" }} onChange={handleMultiUpload} />
+            <input
+              type="file"
+              accept=".csv,.txt,.json"
+              multiple
+              style={{ display: "none" }}
+              onChange={handleMultiUpload}
+            />
           </label>
         </div>
 
         {multiFiles.length > 0 && (
-          <div style={{ marginTop: 12, color: "#fca5a5", textAlign: "left" }}>
+          <div
+            style={{ marginTop: 12, color: "#fca5a5", textAlign: "left" }}
+          >
             <b>Uploaded Threads:</b>
             <ul>{multiFiles.map((f, i) => <li key={i}>{f}</li>)}</ul>
           </div>
@@ -255,20 +293,39 @@ export default function MainUI({
         )}
 
         {/* ▸ Analyze Buttons */}
-        {file && !isAnalyzing && <button style={analyzeBtn} onClick={handleAnalyze}>Analyze Thread</button>}
-        {multiFiles.length >= 2 && !isAnalyzing && <button style={analyzeBtn} onClick={analyzeMultipleThreads}>Analyze {multiFiles.length} Threads</button>}
+        {file && !isAnalyzing && (
+          <button style={analyzeBtn} onClick={handleAnalyze}>
+            Analyze Thread
+          </button>
+        )}
+        {multiFiles.length >= 2 && !isAnalyzing && (
+          <button style={analyzeBtn} onClick={analyzeMultipleThreads}>
+            Analyze {multiFiles.length} Threads
+          </button>
+        )}
 
         {isAnalyzing && (
           <div style={{ marginTop: 16 }}>
             <div style={spinner} />
             <div style={progressBar}>
-              <div style={{
-                width: `${progress}%`,
-                height: "100%",
-                background: "linear-gradient(90deg, #16a34a, #22c55e)",
-              }} />
+              <div
+                style={{
+                  width: `${progress}%`,
+                  height: "100%",
+                  background:
+                    "linear-gradient(90deg, #16a34a, #22c55e)",
+                }}
+              />
             </div>
-            <div style={{ marginTop: 8, color: "#9ca3af", fontSize: 12 }}>Analyzing… {progress}%</div>
+            <div
+              style={{
+                marginTop: 8,
+                color: "#9ca3af",
+                fontSize: 12,
+              }}
+            >
+              Analyzing… {progress}%
+            </div>
           </div>
         )}
 
@@ -286,10 +343,18 @@ export default function MainUI({
             }}
           >
             <div style={{ color: "#e5e7eb", marginBottom: 8 }}>
-              <div>Mean: <b>{summary.mean.toFixed(3)}</b></div>
-              <div>P90: <b>{summary.p90.toFixed(3)}</b></div>
-              <div>P95: <b>{summary.p95.toFixed(3)}</b></div>
-              <div>Max: <b>{summary.max.toFixed(3)}</b></div>
+              <div>
+                Mean: <b>{summary.mean.toFixed(3)}</b>
+              </div>
+              <div>
+                P90: <b>{summary.p90.toFixed(3)}</b>
+              </div>
+              <div>
+                P95: <b>{summary.p95.toFixed(3)}</b>
+              </div>
+              <div>
+                Max: <b>{summary.max.toFixed(3)}</b>
+              </div>
             </div>
 
             <button
@@ -308,11 +373,19 @@ export default function MainUI({
 
             {topFlagged?.length > 0 && (
               <div style={{ marginTop: 10, textAlign: "left" }}>
-                <div style={{ color: "#fca5a5", fontWeight: 700 }}>Top Flagged Comments</div>
+                <div
+                  style={{
+                    color: "#fca5a5",
+                    fontWeight: 700,
+                  }}
+                >
+                  Top Flagged Comments
+                </div>
                 <ul>
                   {topFlagged.map((r, i) => (
                     <li key={i} style={{ marginBottom: 8 }}>
-                      <i style={{ color: "#f87171" }}>{r.text}</i>{" — Score: "}{r.score.toFixed(3)}
+                      <i style={{ color: "#f87171" }}>{r.text}</i>{" "}
+                      — Score: {r.score.toFixed(3)}
                     </li>
                   ))}
                 </ul>
@@ -338,8 +411,15 @@ export default function MainUI({
           onBinClick={(info) => setBinDetail(info)}
         />
         {binDetail && (
-          <div style={{ textAlign: "center", color: "#9ca3af", marginTop: 6 }}>
-            {binDetail.from.toFixed(3)} – {binDetail.to.toFixed(3)} • Count: {binDetail.count}
+          <div
+            style={{
+              textAlign: "center",
+              color: "#9ca3af",
+              marginTop: 6,
+            }}
+          >
+            {binDetail.from.toFixed(3)} – {binDetail.to.toFixed(3)} • Count:{" "}
+            {binDetail.count}
           </div>
         )}
       </ChartModal>
