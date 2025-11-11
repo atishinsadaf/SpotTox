@@ -111,7 +111,6 @@ export default function MainUI({
         .caret{display:inline-block;width:10px;margin-left:4px;background:currentColor;height:1.05em;vertical-align:text-bottom;animation:blink 1s steps(1) infinite;}
       `}</style>
 
-      {/* ───────────────────── Recent Uploads Dropdown ───────────────────── */}
       <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9998 }}>
         <button
           onClick={() => setShowRecent(!showRecent)}
@@ -143,9 +142,7 @@ export default function MainUI({
               padding: 10,
             }}
           >
-            <div
-              style={{ fontWeight: 800, color: "#f87171", marginBottom: 8 }}
-            >
+            <div style={{ fontWeight: 800, color: "#f87171", marginBottom: 8 }}>
               Recent uploads
             </div>
 
@@ -173,9 +170,7 @@ export default function MainUI({
                     }}
                   >
                     <span>{r.name}</span>
-                    <span
-                      style={{ color: "#9ca3af", fontSize: 12 }}
-                    >
+                    <span style={{ color: "#9ca3af", fontSize: 12 }}>
                       {r.time}
                     </span>
                   </li>
@@ -186,7 +181,6 @@ export default function MainUI({
         )}
       </div>
 
-      {/* ───────────────────── Main UI Card ───────────────────── */}
       <main
         style={{
           padding: 40,
@@ -220,11 +214,8 @@ export default function MainUI({
           Time & Date: <strong>{now}</strong>
         </p>
 
-        {/* MODEL DROPDOWN (Dynamic from backend) */}
         <div style={{ marginBottom: 20 }}>
-          <label
-            style={{ color: "#9ca3af", marginRight: 8, fontWeight: 600 }}
-          >
+          <label style={{ color: "#9ca3af", marginRight: 8, fontWeight: 600 }}>
             Model:
           </label>
           <select
@@ -253,7 +244,6 @@ export default function MainUI({
           </select>
         </div>
 
-        {/* UPLOAD BUTTONS */}
         <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
           <label style={btn("red")}>
             Upload Thread
@@ -278,9 +268,7 @@ export default function MainUI({
         </div>
 
         {multiFiles.length > 0 && (
-          <div
-            style={{ marginTop: 12, color: "#fca5a5", textAlign: "left" }}
-          >
+          <div style={{ marginTop: 12, color: "#fca5a5", textAlign: "left" }}>
             <b>Uploaded Threads:</b>
             <ul>{multiFiles.map((f, i) => <li key={i}>{f}</li>)}</ul>
           </div>
@@ -292,12 +280,12 @@ export default function MainUI({
           </p>
         )}
 
-        {/* ▸ Analyze Buttons */}
         {file && !isAnalyzing && (
           <button style={analyzeBtn} onClick={handleAnalyze}>
             Analyze Thread
           </button>
         )}
+
         {multiFiles.length >= 2 && !isAnalyzing && (
           <button style={analyzeBtn} onClick={analyzeMultipleThreads}>
             Analyze {multiFiles.length} Threads
@@ -312,24 +300,17 @@ export default function MainUI({
                 style={{
                   width: `${progress}%`,
                   height: "100%",
-                  background:
-                    "linear-gradient(90deg, #16a34a, #22c55e)",
+                  background: "linear-gradient(90deg, #16a34a, #22c55e)",
                 }}
               />
             </div>
-            <div
-              style={{
-                marginTop: 8,
-                color: "#9ca3af",
-                fontSize: 12,
-              }}
-            >
+            <div style={{ marginTop: 8, color: "#9ca3af", fontSize: 12 }}>
               Analyzing… {progress}%
             </div>
           </div>
         )}
 
-        {/* RESULTS PANEL (scrollable) */}
+        {/* RESULTS PANEL */}
         {summary && histogram && (
           <div
             style={{
@@ -343,18 +324,10 @@ export default function MainUI({
             }}
           >
             <div style={{ color: "#e5e7eb", marginBottom: 8 }}>
-              <div>
-                Mean: <b>{summary.mean.toFixed(3)}</b>
-              </div>
-              <div>
-                P90: <b>{summary.p90.toFixed(3)}</b>
-              </div>
-              <div>
-                P95: <b>{summary.p95.toFixed(3)}</b>
-              </div>
-              <div>
-                Max: <b>{summary.max.toFixed(3)}</b>
-              </div>
+              <div>Mean: <b>{summary.mean?.toFixed(3) ?? "0.000"}</b></div>
+              <div>P90:  <b>{summary.p90?.toFixed(3) ?? "0.000"}</b></div>
+              <div>P95:  <b>{summary.p95?.toFixed(3) ?? "0.000"}</b></div>
+              <div>Max:  <b>{summary.max?.toFixed(3) ?? "0.000"}</b></div>
             </div>
 
             <button
@@ -373,19 +346,14 @@ export default function MainUI({
 
             {topFlagged?.length > 0 && (
               <div style={{ marginTop: 10, textAlign: "left" }}>
-                <div
-                  style={{
-                    color: "#fca5a5",
-                    fontWeight: 700,
-                  }}
-                >
+                <div style={{ color: "#fca5a5", fontWeight: 700 }}>
                   Top Flagged Comments
                 </div>
                 <ul>
                   {topFlagged.map((r, i) => (
                     <li key={i} style={{ marginBottom: 8 }}>
                       <i style={{ color: "#f87171" }}>{r.text}</i>{" "}
-                      — Score: {r.score.toFixed(3)}
+                      — Score: <b>{r.score?.toFixed(3) ?? "0.000"}</b>
                     </li>
                   ))}
                 </ul>
@@ -395,7 +363,6 @@ export default function MainUI({
         )}
       </main>
 
-      {/* HISTOGRAM MODAL */}
       <ChartModal
         open={showChart}
         onClose={() => {
@@ -418,8 +385,8 @@ export default function MainUI({
               marginTop: 6,
             }}
           >
-            {binDetail.from.toFixed(3)} – {binDetail.to.toFixed(3)} • Count:{" "}
-            {binDetail.count}
+            {binDetail.from?.toFixed(3) ?? "0.000"} – {binDetail.to?.toFixed(3) ?? "0.000"} • Count:{" "}
+            {binDetail.count ?? 0}
           </div>
         )}
       </ChartModal>
