@@ -213,47 +213,85 @@ export default function App() {
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Analysis failed");
 
-    setSummary({
-      mean: json.mean,
-      p90: json.p90,
-      p95: json.p95,
-      max: json.max
-    });
+// LSTM returns full label dict extract toxicity list
+if (Array.isArray(json.scores) && typeof json.scores[0] === "object") {
+  const toxicityScores = json.scores.map(s => s.toxicity ?? 0);
 
-    // Build histogram from backend scores
-    setHistogram(makeHistogram(json.histogram));
-    setTopFlagged(json.top || []);
-    setProgress(100);
+  // compute mean, p90, p95, max just like BERT flows
+  const mean = toxicityScores.reduce((a, b) => a + b, 0) / toxicityScores.length;
+  const sorted = [...toxicityScores].sort((a, b) => a - b);
+  const p90 = sorted[Math.floor(sorted.length * 0.9)];
+  const p95 = sorted[Math.floor(sorted.length * 0.95)];
+  const max = Math.max(...toxicityScores);
+
+  setSummary({ mean, p90, p95, max });
+  setHistogram(makeHistogram(toxicityScores));
+  setTopFlagged(json.top || []);
+  setProgress(100);
+  return;
+}
+
+// Normal BERT / RoBERTa case
+setSummary({
+  mean: json.mean,
+  p90: json.p90,
+  p95: json.p95,
+  max: json.max,
+});
+
+setHistogram(makeHistogram(json.histogram));
+setTopFlagged(json.top || []);
+setProgress(100);
+
   }
 
-  // Analyze multiple threads
-  async function analyzeMultipleThreads() {
-    setIsAnalyzing(true);
-    setProgress(0);
+ async function analyzeMultipleThreads() {
+  setIsAnalyzing(true);
+  setProgress(0);
 
-    try {
-      const res = await fetch(`${BASE_URL}/analyze-multiple`, {
+  const total = multiFiles.length;
+  let current = 0;
+
+  // smooth step updater
+  function stepProgress() {
+    const target = Math.round(((current + 0.5) / total) * 100);
+    setProgress((p) => (p < target ? target : p));
+  }
+
+  try {
+    const results = [];
+
+    for (const file of multiFiles) {
+      // hit backend for each file instead of one batch call
+      const res = await fetch(`${BASE_URL}/analyze-file`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filenames: multiFiles, model: selectedModel }),
+        body: JSON.stringify({ filename: file, text_col: "txt", model: selectedModel }),
       });
 
       const json = await res.json();
-      setIsAnalyzing(false);
+      if (!res.ok) throw new Error(json.error || "Analysis failed");
 
-      setMultiResults(
-        (json.results || []).map((r) => ({
-          filename: r.file,
-          summary: { mean: r.mean },
-        }))
-      );
+      results.push({
+        filename: file,
+        summary: { mean: json.mean },
+      });
 
-      setShowMulti(true);
-    } catch (err) {
-      setIsAnalyzing(false);
-      alert("Multi-analysis failed: " + err.message);
+      current++;
+      stepProgress();
+      await new Promise((r) => setTimeout(r, 200)); // smooth look
     }
+
+    setProgress(100);
+
+    setMultiResults(results);
+    setShowMulti(true);
+  } catch (err) {
+    alert("Multi-analysis failed: " + err.message);
+  } finally {
+    setTimeout(() => setIsAnalyzing(false), 500);
   }
+}
 
   return (
     <>
