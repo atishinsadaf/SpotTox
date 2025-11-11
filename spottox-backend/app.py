@@ -1,12 +1,13 @@
-# app.py - SpotTox Backend Server (BERT + RoBERTa multi-model)
+# app.py - SpotTox Backend Server (BERT + RoBERTa + LSTM)
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os, json
 from datetime import datetime
 import torch
+import torch.nn as nn
 import numpy as np
 import pandas as pd
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModel
 
 # ---------------------------------------------------------------------
 # Paths & config
@@ -18,10 +19,39 @@ ALLOWED_EXTENSIONS = {"txt", "json", "csv"}
 MODEL_PATHS = {
     "SpotToxBERT": os.path.join(BASE_DIR, "models/SpotToxBERT"),
     "SpotToxRoBERTa": os.path.join(BASE_DIR, "models/SpotToxRoBERTa"),
+    "SpotToxLSTM": os.path.join(BASE_DIR, "models/SpotToxLSTM"),
 }
 
 current_model_name = "SpotToxBERT"
 current_tok, current_mdl = None, None
+
+
+# ---------------------------------------------------------------------
+# LSTM model architecture (6-label output)
+# ---------------------------------------------------------------------
+class SpotToxLSTM(nn.Module):
+    def __init__(self, hidden_dim=256, num_labels=6):
+        super().__init__()
+        self.bert = AutoModel.from_pretrained("bert-base-uncased")
+        self.lstm = nn.LSTM(
+            input_size=self.bert.config.hidden_size,
+            hidden_size=hidden_dim,
+            num_layers=2,
+            batch_first=True,
+            bidirectional=True
+        )
+        self.dropout = nn.Dropout(0.3)
+        self.fc = nn.Linear(hidden_dim * 2, num_labels)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, input_ids, attention_mask, labels=None, **kwargs):
+        with torch.no_grad():
+            bert_out = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        sequence_output = bert_out.last_hidden_state
+        lstm_out, _ = self.lstm(sequence_output)
+        pooled = torch.mean(lstm_out, dim=1)
+        x = self.dropout(pooled)
+        return self.sigmoid(self.fc(x))   # [batch, 6]
 
 
 # ---------------------------------------------------------------------
@@ -43,10 +73,17 @@ def load_model(name):
 
     print(f"Switching to model: {name}")
 
-    tok = AutoTokenizer.from_pretrained(model_dir)
-    mdl = AutoModelForSequenceClassification.from_pretrained(model_dir)
-    mdl.to("cpu")
-    mdl.eval()
+    if name == "SpotToxLSTM":
+        tok = AutoTokenizer.from_pretrained(model_dir)
+        mdl = SpotToxLSTM()
+        mdl.load_state_dict(torch.load(os.path.join(model_dir, "SpotToxLSTM.pt"), map_location="cpu"))
+        mdl.to("cpu")
+        mdl.eval()
+    else:
+        tok = AutoTokenizer.from_pretrained(model_dir)
+        mdl = AutoModelForSequenceClassification.from_pretrained(model_dir)
+        mdl.to("cpu")
+        mdl.eval()
 
     current_model_name = name
     current_tok = tok
@@ -54,9 +91,11 @@ def load_model(name):
     print(f"Model loaded: {name}")
 
 
+# return full label set for LSTM
 def score_texts(tok, mdl, texts, max_length=256, batch_size=32):
     device = torch.device("cpu")
-    scores = []
+    results = []
+
     for i in range(0, len(texts), batch_size):
         enc = tok(
             texts[i:i + batch_size],
@@ -66,10 +105,31 @@ def score_texts(tok, mdl, texts, max_length=256, batch_size=32):
             max_length=max_length,
         )
         enc = {k: v.to(device) for k, v in enc.items()}
+
         with torch.no_grad():
-            logits = mdl(**enc).logits.squeeze(-1).cpu().numpy()
-        scores.extend(np.clip(logits, 0, 1))
-    return np.array(scores)
+            out = mdl(**enc)
+
+        if hasattr(out, "logits"):
+            logits = out.logits.squeeze(-1).cpu().numpy()
+            logits = np.clip(logits, 0, 1)
+            results.extend(logits.tolist())
+            continue
+
+        # LSTM returns 6 logits
+        logits = out.cpu().numpy()
+        logits = np.clip(logits, 0, 1)
+
+        for row in logits:
+            results.append({
+                "offensiveness": float(row[0]),
+                "toxicity": float(row[1]),
+                "severe_toxicity": float(row[2]),
+                "profanity": float(row[3]),
+                "threat": float(row[4]),
+                "insult": float(row[5]),
+            })
+
+    return results
 
 
 # ---------------------------------------------------------------------
@@ -79,7 +139,6 @@ app = Flask(__name__)
 CORS(app)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Load default model on startup
 load_model(current_model_name)
 
 
@@ -119,6 +178,7 @@ def upload_file():
     f.save(path)
     return {"filename": f.filename}
 
+
 @app.post("/upload-multiple")
 def upload_multiple():
     files = request.files.getlist("files")
@@ -137,7 +197,7 @@ def analyze_file():
     data = request.get_json()
     filename = data.get("filename")
     text_col = data.get("text_col", "txt")
-    model_override = data.get("model")  #user-selected model
+    model_override = data.get("model")
 
     if model_override and model_override != current_model_name:
         load_model(model_override)
@@ -151,6 +211,18 @@ def analyze_file():
     texts = df[text_col].fillna("").astype(str).tolist()
     scores = score_texts(current_tok, current_mdl, texts)
 
+    # LSTM return full set of label scores per comment
+    if isinstance(scores[0], dict):
+        return {
+            "model": current_model_name,
+            "scores": scores,
+            "top": [
+                {"text": texts[i][:200], "scores": scores[i]}
+                for i in range(min(10, len(scores)))
+            ]
+        }
+
+    scores = np.array(scores)
     return {
         "model": current_model_name,
         "mean": float(scores.mean()),
@@ -190,6 +262,14 @@ def analyze_multiple():
         texts = df[text_col].fillna("").astype(str).tolist()
         scores = score_texts(current_tok, current_mdl, texts)
 
+        # LSTM compute mean of "toxicity" for chart
+        if isinstance(scores[0], dict):
+            mean_tox = float(np.mean([s["toxicity"] for s in scores]))
+            results.append({"file": f, "mean": mean_tox, "scores": scores})
+            continue
+
+        # BERT/RoBERTa
+        scores = np.array(scores)
         results.append({
             "file": f,
             "mean": float(scores.mean()),
@@ -198,6 +278,7 @@ def analyze_multiple():
             "max": float(scores.max()),
             "histogram": scores.tolist()
         })
+
     return {"model": current_model_name, "results": results}
 
 
