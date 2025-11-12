@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Python Virtual Environment
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Uploads
+spottox-backend/uploads/
+
+# IDE/Editor files
+.vscode/
+.DS_Store
+
+# Build files
+build/
