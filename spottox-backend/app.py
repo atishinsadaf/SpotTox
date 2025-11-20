@@ -11,7 +11,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, Auto
 import random
 
 # Demo mode - set to True for presentations without trained models
-DEMO_MODE = False
+DEMO_MODE = True
 
 # ---------------------------------------------------------------------
 # Paths & config
@@ -24,8 +24,6 @@ MODEL_PATHS = {
     "SpotToxBERT": os.path.join(BASE_DIR, "models/SpotToxBERT"),
     "SpotToxRoBERTa": os.path.join(BASE_DIR, "models/SpotToxRoBERTa"),
     "SpotToxLSTM": os.path.join(BASE_DIR, "models/SpotToxLSTM"),
-    "SpotToxDistilBERT": os.path.join(BASE_DIR, "models/SpotToxDistilBERT"),
-
 }
 
 current_model_name = "SpotToxBERT"
@@ -117,16 +115,8 @@ def score_texts(tok, mdl, texts, max_length=256, batch_size=32):
 
         if hasattr(out, "logits"):
             logits = out.logits.squeeze(-1).cpu().numpy()
-
-            if current_model_name == "SpotToxDistilBERT":
-                # DistilBERT regression: offensiveness_score in [-1, 1] → map to [0, 1]
-                scores = (logits + 1.0) / 2.0
-                scores = np.clip(scores, 0, 1)
-            else:
-                # Other models (BERT/RoBERTa) – keep old behavior
-                scores = np.clip(logits, 0, 1)
-
-            results.extend(scores.tolist())
+            logits = np.clip(logits, 0, 1)
+            results.extend(logits.tolist())
             continue
 
         # LSTM returns 6 logits
@@ -155,7 +145,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Load default model on startup
 if DEMO_MODE:
-    print(" Running in DEMO MODE - using simulated data")
+    print("🎭 Running in DEMO MODE - using simulated data")
 else:
     load_model(current_model_name)
 
@@ -186,7 +176,7 @@ def set_model():
     if DEMO_MODE:
         # In demo mode, just update the name without loading
         current_model_name = name
-        print(f" Demo mode: Switched to {name} (simulated)")
+        print(f"🎭 Demo mode: Switched to {name} (simulated)")
         return {"status": "ok", "active_model": name}
     else:
         try:
