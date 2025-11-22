@@ -1,4 +1,4 @@
-# app.py - SpotTox Backend Server (BERT + RoBERTa + LSTM)
+# app.py - SpotTox Backend Server
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os, json
@@ -10,8 +10,12 @@ import pandas as pd
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModel
 import random
 
-# Demo mode - set to True for presentations without trained models
 DEMO_MODE = False
+
+# ---------------------------------------------------------------------
+# Device (CPU or GPU)
+# ---------------------------------------------------------------------
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ---------------------------------------------------------------------
 # Paths & config
@@ -57,7 +61,7 @@ class SpotToxLSTM(nn.Module):
         lstm_out, _ = self.lstm(sequence_output)
         pooled = torch.mean(lstm_out, dim=1)
         x = self.dropout(pooled)
-        return self.sigmoid(self.fc(x))   # [batch, 6]
+        return self.sigmoid(self.fc(x))  # [batch, 6]
 
 
 # ---------------------------------------------------------------------
@@ -82,13 +86,13 @@ def load_model(name):
     if name == "SpotToxLSTM":
         tok = AutoTokenizer.from_pretrained(model_dir)
         mdl = SpotToxLSTM()
-        mdl.load_state_dict(torch.load(os.path.join(model_dir, "SpotToxLSTM.pt"), map_location="cpu"))
-        mdl.to("cpu")
+        mdl.load_state_dict(torch.load(os.path.join(model_dir, "SpotToxLSTM.pt"), map_location=device))
+        mdl.to(device)
         mdl.eval()
     else:
         tok = AutoTokenizer.from_pretrained(model_dir)
         mdl = AutoModelForSequenceClassification.from_pretrained(model_dir)
-        mdl.to("cpu")
+        mdl.to(device)
         mdl.eval()
 
     current_model_name = name
@@ -99,7 +103,6 @@ def load_model(name):
 
 # return full label set for LSTM
 def score_texts(tok, mdl, texts, max_length=256, batch_size=32):
-    device = torch.device("cpu")
     results = []
 
     for i in range(0, len(texts), batch_size):
@@ -176,13 +179,13 @@ def list_models():
 @app.post("/set_model")
 def set_model():
     global current_model_name
-    
+
     data = request.get_json()
     name = data.get("model")
-    
+
     if name not in MODEL_PATHS:
         return {"error": f"Unknown model: {name}"}, 400
-    
+
     if DEMO_MODE:
         # In demo mode, just update the name without loading
         current_model_name = name
@@ -236,7 +239,7 @@ def analyze_file():
         return {"error": f"column {text_col} missing"}, 400
 
     texts = df[text_col].fillna("").astype(str).tolist()
-    
+
     # DEMO MODE: Generate fake scores
     if DEMO_MODE:
         scores = np.array([random.uniform(0, 1) for _ in texts])
@@ -249,7 +252,7 @@ def analyze_file():
         if isinstance(scores[0], dict):
             # Extract "toxicity" scores for histogram/stats
             toxicity_scores = np.array([s["toxicity"] for s in scores])
-            
+
             return {
                 "model": current_model_name,
                 "mean": float(toxicity_scores.mean()),
@@ -300,7 +303,7 @@ def analyze_multiple():
             continue
 
         texts = df[text_col].fillna("").astype(str).tolist()
-        
+
         # DEMO MODE: Generate fake scores
         if DEMO_MODE:
             scores = np.array([random.uniform(0, 1) for _ in texts])
