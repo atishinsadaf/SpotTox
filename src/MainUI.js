@@ -1,11 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { Histogram, ChartModal } from "./Chart";
+import ChatUI from "./ChatUI";
 
 export default function MainUI({
   now,
   typed,
 
-  // recent uploads state
+  // recent uploads
   recent,
   showRecent,
   setShowRecent,
@@ -18,29 +19,36 @@ export default function MainUI({
   handleUpload,
   handleMultiUpload,
 
-  // analysis actions
+  // analysis
   handleAnalyze,
   analyzeMultipleThreads,
 
-  // analysis state
+  // state
   isAnalyzing,
   progress,
   summary,
   histogram,
   topFlagged,
 
-  // chart modal
+  // chart
   showChart,
   setShowChart,
   binDetail,
   setBinDetail,
 
-  // MODEL SELECTION
+  // models
   models,
   selectedModel,
   setSelectedModel,
   modelName
 }) {
+
+  const [showChat, setShowChat] = useState(false);
+
+  // SEARCH THREAD STATE
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchThread, setSearchThread] = useState("");
+
   const btn = (color) => ({
     padding: "12px 20px",
     background:
@@ -98,20 +106,40 @@ export default function MainUI({
           "linear-gradient(135deg, #000000, #111827, #1f2937, #000000)",
       }}
     >
-      <style>{`
-        @keyframes blink {0%,50%{opacity:1;}51%,100%{opacity:0;}}
-        .gradient-text {
-          background: linear-gradient(90deg,#dc2626,#ef4444,#f87171);
-          background-size:200% 200%;
-          -webkit-background-clip:text;
-          color:transparent;
-          animation:moveGradient 4s ease infinite;
-          font-weight:900;
-        }
-        .caret{display:inline-block;width:10px;margin-left:4px;background:currentColor;height:1.05em;vertical-align:text-bottom;animation:blink 1s steps(1) infinite;}
-      `}</style>
 
-      <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9998 }}>
+      {/* ------------------------------------------------------
+          TOP RIGHT: CHAT MODE + RECENT UPLOADS
+      ------------------------------------------------------ */}
+      <div
+        style={{
+          position: "fixed",
+          top: 16,
+          right: 16,
+          zIndex: 9998,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+
+        {/* CHAT BUTTON (MOVED HERE) */}
+        <button
+          onClick={() => setShowChat(true)}
+          style={{
+            padding: "10px 14px",
+            background: "linear-gradient(90deg,#10b981,#22c55e)",
+            color: "white",
+            border: "none",
+            borderRadius: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
+          }}
+        >
+          Chat Mode
+        </button>
+
+        {/* RECENT UPLOADS BUTTON */}
         <button
           onClick={() => setShowRecent(!showRecent)}
           style={{
@@ -131,7 +159,9 @@ export default function MainUI({
         {showRecent && (
           <div
             style={{
-              marginTop: 8,
+              position: "absolute",
+              top: 50,
+              right: 0,
               width: 320,
               maxHeight: 360,
               overflowY: "auto",
@@ -181,6 +211,9 @@ export default function MainUI({
         )}
       </div>
 
+      {/* ------------------------------------------------------
+          MAIN PANEL
+      ------------------------------------------------------ */}
       <main
         style={{
           padding: 40,
@@ -191,7 +224,6 @@ export default function MainUI({
           maxWidth: 520,
           width: "90%",
           boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
-          position: "relative",
         }}
       >
         <h1 style={{ marginBottom: 12, fontWeight: 800 }}>
@@ -214,6 +246,7 @@ export default function MainUI({
           Time & Date: <strong>{now}</strong>
         </p>
 
+        {/* MODEL SELECTOR */}
         <div style={{ marginBottom: 20 }}>
           <label style={{ color: "#9ca3af", marginRight: 8, fontWeight: 600 }}>
             Model:
@@ -244,9 +277,36 @@ export default function MainUI({
           </select>
         </div>
 
-        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-          <label style={btn("red")}>
-            Upload Thread
+        {/* UPLOAD BUTTONS — UPDATED */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            alignItems: "center",
+            marginBottom: 10,
+          }}
+        >
+
+          {/* Upload Dataset */}
+          <label
+            style={{
+              ...btn("red"),
+              width: 220,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              paddingTop: 10,
+              paddingBottom: 10,
+            }}
+          >
+            <span style={{ fontSize: 16, fontWeight: 700 }}>
+              Upload Dataset
+            </span>
+            <span style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
+              For larger files containing many threads
+            </span>
+
             <input
               type="file"
               accept=".csv,.txt,.json"
@@ -255,7 +315,36 @@ export default function MainUI({
             />
           </label>
 
-          <label style={btn("blue")}>
+          {/* NEW Upload Thread */}
+          <label
+            style={{
+              ...btn("red"),
+              width: 220,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              paddingTop: 10,
+              paddingBottom: 10,
+              background: "linear-gradient(90deg,#b91c1c,#dc2626)"
+            }}
+          >
+            <span style={{ fontSize: 16, fontWeight: 700 }}>
+              Upload Thread
+            </span>
+            <span style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
+              For smaller files containing 1 thread
+            </span>
+
+            <input
+              type="file"
+              accept=".csv,.txt,.json"
+              style={{ display: "none" }}
+              onChange={handleUpload}
+            />
+          </label>
+
+          {/* Upload Multiple */}
+          <label style={{ ...btn("blue"), width: 220, textAlign: "center" }}>
             Upload Multiple
             <input
               type="file"
@@ -265,7 +354,27 @@ export default function MainUI({
               onChange={handleMultiUpload}
             />
           </label>
+
         </div>
+
+        {/* SEARCH THREAD BUTTON */}
+        {(file || multiFiles.length > 0) && (
+          <button
+            onClick={() => setShowSearch(true)}
+            style={{
+              marginTop: 16,
+              padding: "12px 20px",
+              background: "linear-gradient(90deg,#3b82f6,#6366f1)",
+              color: "white",
+              borderRadius: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+            }}
+          >
+            Search Thread
+          </button>
+        )}
 
         {multiFiles.length > 0 && (
           <div style={{ marginTop: 12, color: "#fca5a5", textAlign: "left" }}>
@@ -310,59 +419,181 @@ export default function MainUI({
           </div>
         )}
 
-        {/* RESULTS PANEL */}
-        {summary && histogram && (
+        {/* ======================================================
+            THREAD SEARCH MODAL
+        ====================================================== */}
+        {showSearch && (
           <div
             style={{
-              marginTop: 18,
-              padding: 12,
-              background: "#1f2937",
-              borderRadius: 12,
-              maxHeight: "350px",
-              overflowY: "auto",
-              scrollbarWidth: "thin",
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              background: "rgba(0,0,0,0.6)",
+              zIndex: 99999,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
             }}
           >
-            <div style={{ color: "#e5e7eb", marginBottom: 8 }}>
-              <div>Mean: <b>{summary.mean?.toFixed(3) ?? "0.000"}</b></div>
-              <div>P90:  <b>{summary.p90?.toFixed(3) ?? "0.000"}</b></div>
-              <div>P95:  <b>{summary.p95?.toFixed(3) ?? "0.000"}</b></div>
-              <div>Max:  <b>{summary.max?.toFixed(3) ?? "0.000"}</b></div>
-            </div>
-
-            <button
-              onClick={() => setShowChart(true)}
+            <div
               style={{
-                padding: "10px 16px",
-                background: "#374151",
-                color: "white",
-                borderRadius: 10,
-                fontWeight: 700,
-                cursor: "pointer",
+                background: "#1f2937",
+                padding: 25,
+                borderRadius: 12,
+                width: "90%",
+                maxWidth: 500,
+                boxShadow: "0 12px 30px rgba(0,0,0,0.8)",
               }}
             >
-              View Histogram
-            </button>
+              <button
+                onClick={() => setShowSearch(false)}
+                style={{
+                  float: "right",
+                  background: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
 
-            {topFlagged?.length > 0 && (
-              <div style={{ marginTop: 10, textAlign: "left" }}>
-                <div style={{ color: "#fca5a5", fontWeight: 700 }}>
-                  Top Flagged Comments
-                </div>
-                <ul>
-                  {topFlagged.map((r, i) => (
-                    <li key={i} style={{ marginBottom: 8 }}>
-                      <i style={{ color: "#f87171" }}>{r.text}</i>{" "}
-                      — Score: <b>{r.score?.toFixed(3) ?? "0.000"}</b>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+              <h2 style={{ marginBottom: 15, textAlign: "center" }}>
+                Search Thread by ID
+              </h2>
+
+              <input
+                type="text"
+                placeholder="Enter thread_id"
+                value={searchThread}
+                onChange={(e) => setSearchThread(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: 8,
+                  border: "1px solid #374151",
+                  background: "#111827",
+                  color: "white",
+                  marginBottom: 12,
+                }}
+              />
+
+              <button
+                onClick={async () => {
+                  if (!searchThread.trim()) {
+                    alert("Please enter a thread ID.");
+                    return;
+                  }
+
+                  try {
+                    const res = await fetch("http://127.0.0.1:5001/search_thread", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ thread_id: searchThread }),
+                    });
+
+                    const data = await res.json();
+
+                    if (!data.found) {
+                      alert("Thread not found in dataset.");
+                    } else {
+                      alert(
+                        `Thread ID: ${data.thread_id}\n` +
+                        `Number of comments: ${data.count}\n` +
+                        `Mean toxicity: ${data.mean.toFixed(3)}\n` +
+                        `P90 toxicity: ${data.p90.toFixed(3)}\n` +
+                        `P95 toxicity: ${data.p95.toFixed(3)}\n` +
+                        `Max toxicity: ${data.max.toFixed(3)}`
+                      );
+                      console.log("Thread stats:", data);
+                    }
+
+                  } catch (err) {
+                    alert("Backend error: " + err.message);
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  background: "linear-gradient(90deg,#3b82f6,#6366f1)",
+                  color: "white",
+                  borderRadius: 10,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Search
+              </button>
+            </div>
           </div>
         )}
+
+        {/* ======================================================
+            CHAT MODAL
+        ====================================================== */}
+        {showChat && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              background: "rgba(0,0,0,0.6)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 99999,
+            }}
+          >
+            <div
+              style={{
+                background: "#1f2937",
+                padding: 20,
+                borderRadius: 12,
+                width: "90%",
+                maxWidth: 550,
+                maxHeight: "80vh",
+                overflowY: "auto",
+                boxShadow: "0 12px 30px rgba(0,0,0,0.8)",
+              }}
+            >
+              <button
+                onClick={() => setShowChat(false)}
+                style={{
+                  float: "right",
+                  background: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+
+              <h2 style={{ textAlign: "center", marginBottom: 12 }}>
+                Real-Time Chat Mode
+              </h2>
+
+              <ChatUI
+                model={selectedModel}
+                models={models}
+                onModelChange={setSelectedModel}
+              />
+            </div>
+          </div>
+        )}
+
       </main>
 
+      {/* CHART MODAL */}
       <ChartModal
         open={showChart}
         onClose={() => {
@@ -377,6 +608,7 @@ export default function MainUI({
           threshold={0.2}
           onBinClick={(info) => setBinDetail(info)}
         />
+
         {binDetail && (
           <div
             style={{
@@ -385,8 +617,8 @@ export default function MainUI({
               marginTop: 6,
             }}
           >
-            {binDetail.from?.toFixed(3) ?? "0.000"} – {binDetail.to?.toFixed(3) ?? "0.000"} • Count:{" "}
-            {binDetail.count ?? 0}
+            {binDetail.from?.toFixed(3)} – {binDetail.to?.toFixed(3)} • Count:{" "}
+            {binDetail.count}
           </div>
         )}
       </ChartModal>
