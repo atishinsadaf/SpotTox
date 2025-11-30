@@ -29,7 +29,6 @@ MODEL_PATHS = {
     "SpotToxRoBERTa": os.path.join(BASE_DIR, "models/SpotToxRoBERTa"),
     "SpotToxLSTM": os.path.join(BASE_DIR, "models/SpotToxLSTM"),
     "SpotToxDistilBERT": os.path.join(BASE_DIR, "models/SpotToxDistilBERT"),
-
 }
 
 current_model_name = "SpotToxBERT"
@@ -61,7 +60,7 @@ class SpotToxLSTM(nn.Module):
         lstm_out, _ = self.lstm(sequence_output)
         pooled = torch.mean(lstm_out, dim=1)
         x = self.dropout(pooled)
-        return self.sigmoid(self.fc(x))  # [batch, 6]
+        return self.sigmoid(self.fc(x))
 
 
 # ---------------------------------------------------------------------
@@ -101,7 +100,6 @@ def load_model(name):
     print(f"Model loaded: {name}")
 
 
-# return full label set for LSTM
 def score_texts(tok, mdl, texts, max_length=256, batch_size=32):
     results = []
 
@@ -122,17 +120,14 @@ def score_texts(tok, mdl, texts, max_length=256, batch_size=32):
             logits = out.logits.squeeze(-1).cpu().numpy()
 
             if current_model_name == "SpotToxDistilBERT":
-                # DistilBERT regression: offensiveness_score in [-1, 1] → map to [0, 1]
                 scores = (logits + 1.0) / 2.0
                 scores = np.clip(scores, 0, 1)
             else:
-                # Other models (BERT/RoBERTa) – keep old behavior
                 scores = np.clip(logits, 0, 1)
 
             results.extend(scores.tolist())
             continue
 
-        # LSTM returns 6 logits
         logits = out.cpu().numpy()
         logits = np.clip(logits, 0, 1)
 
@@ -156,9 +151,8 @@ app = Flask(__name__)
 CORS(app)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Load default model on startup
 if DEMO_MODE:
-    print(" Running in DEMO MODE - using simulated data")
+    print("Running in DEMO MODE")
 else:
     load_model(current_model_name)
 
@@ -187,16 +181,14 @@ def set_model():
         return {"error": f"Unknown model: {name}"}, 400
 
     if DEMO_MODE:
-        # In demo mode, just update the name without loading
         current_model_name = name
-        print(f" Demo mode: Switched to {name} (simulated)")
         return {"status": "ok", "active_model": name}
-    else:
-        try:
-            load_model(name)
-            return {"status": "ok", "active_model": name}
-        except Exception as e:
-            return {"error": str(e)}, 400
+
+    try:
+        load_model(name)
+        return {"status": "ok", "active_model": name}
+    except Exception as e:
+        return {"error": str(e)}, 400
 
 
 @app.post("/upload")
@@ -240,7 +232,6 @@ def analyze_file():
 
     texts = df[text_col].fillna("").astype(str).tolist()
 
-    # DEMO MODE: Generate fake scores
     if DEMO_MODE:
         scores = np.array([random.uniform(0, 1) for _ in texts])
     else:
@@ -248,11 +239,8 @@ def analyze_file():
             load_model(model_override)
         scores = score_texts(current_tok, current_mdl, texts)
 
-        # LSTM returns dict of 6 labels per comment
         if isinstance(scores[0], dict):
-            # Extract "toxicity" scores for histogram/stats
             toxicity_scores = np.array([s["toxicity"] for s in scores])
-
             return {
                 "model": current_model_name,
                 "mean": float(toxicity_scores.mean()),
@@ -260,17 +248,16 @@ def analyze_file():
                 "p95": float(np.quantile(toxicity_scores, .95)),
                 "max": float(toxicity_scores.max()),
                 "histogram": toxicity_scores.tolist(),
-                "detailed_scores": scores,  # Full 6-label data for advanced view
+                "detailed_scores": scores,
                 "top": [
                     {"text": texts[i][:200], "score": float(toxicity_scores[i]), "details": scores[i]}
                     for i in np.argsort(-toxicity_scores)[:10]
                 ]
             }
 
-    # BERT/RoBERTa or DEMO MODE (single score per comment)
     scores = np.array(scores)
     return {
-        "model": current_model_name if not DEMO_MODE else f"{current_model_name} (Demo)",
+        "model": current_model_name,
         "mean": float(scores.mean()),
         "p90": float(np.quantile(scores, .9)),
         "p95": float(np.quantile(scores, .95)),
@@ -304,7 +291,6 @@ def analyze_multiple():
 
         texts = df[text_col].fillna("").astype(str).tolist()
 
-        # DEMO MODE: Generate fake scores
         if DEMO_MODE:
             scores = np.array([random.uniform(0, 1) for _ in texts])
             results.append({
@@ -320,13 +306,11 @@ def analyze_multiple():
                 load_model(model_name)
             scores = score_texts(current_tok, current_mdl, texts)
 
-            # LSTM compute mean of "toxicity" for chart
             if isinstance(scores[0], dict):
                 mean_tox = float(np.mean([s["toxicity"] for s in scores]))
                 results.append({"file": f, "mean": mean_tox, "scores": scores})
                 continue
 
-            # BERT/RoBERTa
             scores = np.array(scores)
             results.append({
                 "file": f,
@@ -337,7 +321,107 @@ def analyze_multiple():
                 "histogram": scores.tolist()
             })
 
-    return {"model": current_model_name if not DEMO_MODE else f"{current_model_name} (Demo)", "results": results}
+    return {"model": current_model_name, "results": results}
+
+
+@app.post("/analyze_chat")
+def analyze_chat():
+    data = request.get_json()
+    text = data.get("text", "")
+    model_override = data.get("model", current_model_name)
+
+    if not text.strip():
+        return {"error": "empty text"}, 400
+
+    if model_override and model_override != current_model_name:
+        load_model(model_override)
+
+    scores = score_texts(current_tok, current_mdl, [text])
+
+    if isinstance(scores[0], dict):
+        toxicity = float(scores[0]["toxicity"])
+        return {
+            "model": current_model_name,
+            "toxicity": toxicity,
+            "details": scores[0]
+        }
+
+    score = float(scores[0])
+    return {"model": current_model_name, "score": score}
+
+
+@app.post("/search_thread")
+def search_thread():
+    data = request.get_json()
+    thread_id = str(data.get("thread_id", "")).strip()
+
+    if not thread_id:
+        return jsonify({"found": False, "error": "No thread_id provided"}), 400
+
+    # Find CSV files
+    csv_files = [f for f in os.listdir(UPLOAD_FOLDER) if f.endswith(".csv")]
+    if not csv_files:
+        return jsonify({"found": False, "error": "No uploaded dataset"}), 400
+
+    # choose the most recently uploaded CSV, not alphabetically
+    latest_file = max(
+        csv_files,
+        key=lambda f: os.path.getmtime(os.path.join(UPLOAD_FOLDER, f))
+    )
+
+    print("SEARCHING THIS FILE:", latest_file)
+
+    path = os.path.join(UPLOAD_FOLDER, latest_file)
+    df = pd.read_csv(path)
+
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.lower()
+        .str.replace("\ufeff", "")
+    )
+
+    print("COLUMNS:", df.columns.tolist())
+
+    # Determine ID column
+    if "thread_id" in df.columns:
+        id_col = "thread_id"
+    elif "post_id" in df.columns:
+        id_col = "post_id"
+    else:
+        return jsonify({"found": False, "error": "No thread_id or post_id column"}), 400
+
+    # Determine text column
+    if "text" in df.columns:
+        text_col = "text"
+    elif "txt" in df.columns:
+        text_col = "txt"
+    else:
+        return jsonify({"found": False, "error": "No text or txt column"}), 400
+
+    rows = df[df[id_col].astype(str) == thread_id]
+
+    if rows.empty:
+        return jsonify({"found": False, "rows": []})
+
+    texts = rows[text_col].fillna("").astype(str).tolist()
+
+    scores = score_texts(current_tok, current_mdl, texts)
+
+    if isinstance(scores[0], dict):
+        toxicity = np.array([s["toxicity"] for s in scores])
+    else:
+        toxicity = np.array(scores)
+
+    return jsonify({
+        "found": True,
+        "thread_id": thread_id,
+        "count": len(toxicity),
+        "mean": float(toxicity.mean()),
+        "p90": float(np.quantile(toxicity, 0.9)),
+        "p95": float(np.quantile(toxicity, 0.95)),
+        "max": float(toxicity.max()),
+    })
 
 
 if __name__ == "__main__":
