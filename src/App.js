@@ -70,6 +70,15 @@ export default function App() {
 
   const showMultiModal = showMulti && multiResults;
 
+  // ADDED FOR THREAD SEARCH POPUP
+  const [showThreadSearch, setShowThreadSearch] = useState(false);
+
+  // ====================================
+  // ADDED FOR THREAD SEARCH (STATE)
+  // ====================================
+  const [searchThread, setSearchThread] = useState("");
+  const [threadResults, setThreadResults] = useState([]);
+
   // Live clock updates
   useEffect(() => {
     if (showChart) return;
@@ -180,7 +189,10 @@ export default function App() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const upRes = await fetch(`${BASE_URL}/upload`, { method: "POST", body: form });
+      const upRes = await fetch(`${BASE_URL}/upload`, {
+        method: "POST",
+        body: form,
+      });
       const upJson = await upRes.json();
       if (!upRes.ok) throw new Error(upJson.error || "Upload failed");
       const filename = upJson.filename;
@@ -206,91 +218,111 @@ export default function App() {
     const res = await fetch(`${BASE_URL}/analyze-file`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename, text_col: "txt", model: selectedModel }),
+      body: JSON.stringify({ filename, text_col: "text", model: selectedModel }),
     });
 
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Analysis failed");
 
-// LSTM returns full label dict extract toxicity list
-if (Array.isArray(json.scores) && typeof json.scores[0] === "object") {
-  const toxicityScores = json.scores.map(s => s.toxicity ?? 0);
+    // LSTM returns full label dict extract toxicity list
+    if (Array.isArray(json.scores) && typeof json.scores[0] === "object") {
+      const toxicityScores = json.scores.map((s) => s.toxicity ?? 0);
 
-  // compute mean, p90, p95, max just like BERT flows
-  const mean = toxicityScores.reduce((a, b) => a + b, 0) / toxicityScores.length;
-  const sorted = [...toxicityScores].sort((a, b) => a - b);
-  const p90 = sorted[Math.floor(sorted.length * 0.9)];
-  const p95 = sorted[Math.floor(sorted.length * 0.95)];
-  const max = Math.max(...toxicityScores);
+      const mean = toxicityScores.reduce((a, b) => a + b, 0) / toxicityScores.length;
+      const sorted = [...toxicityScores].sort((a, b) => a - b);
+      const p90 = sorted[Math.floor(sorted.length * 0.9)];
+      const p95 = sorted[Math.floor(sorted.length * 0.95)];
+      const max = Math.max(...toxicityScores);
 
-  setSummary({ mean, p90, p95, max });
-  setHistogram(makeHistogram(toxicityScores));
-  setTopFlagged(json.top || []);
-  setProgress(100);
-  return;
-}
-
-// Normal BERT / RoBERTa case
-setSummary({
-  mean: json.mean,
-  p90: json.p90,
-  p95: json.p95,
-  max: json.max,
-});
-
-setHistogram(makeHistogram(json.histogram));
-setTopFlagged(json.top || []);
-setProgress(100);
-
-  }
-
- async function analyzeMultipleThreads() {
-  setIsAnalyzing(true);
-  setProgress(0);
-
-  const total = multiFiles.length;
-  let current = 0;
-
-  // smooth step updater
-  function stepProgress() {
-    const target = Math.round(((current + 0.5) / total) * 100);
-    setProgress((p) => (p < target ? target : p));
-  }
-
-  try {
-    const results = [];
-
-    for (const file of multiFiles) {
-      // hit backend for each file instead of one batch call
-      const res = await fetch(`${BASE_URL}/analyze-file`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: file, text_col: "txt", model: selectedModel }),
-      });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Analysis failed");
-
-      results.push({
-        filename: file,
-        summary: { mean: json.mean },
-      });
-
-      current++;
-      stepProgress();
-      await new Promise((r) => setTimeout(r, 200)); // smooth look
+      setSummary({ mean, p90, p95, max });
+      setHistogram(makeHistogram(toxicityScores));
+      setTopFlagged(json.top || []);
+      setProgress(100);
+      return;
     }
 
-    setProgress(100);
+    // Normal BERT / RoBERTa case
+    setSummary({
+      mean: json.mean,
+      p90: json.p90,
+      p95: json.p95,
+      max: json.max,
+    });
 
-    setMultiResults(results);
-    setShowMulti(true);
-  } catch (err) {
-    alert("Multi-analysis failed: " + err.message);
-  } finally {
-    setTimeout(() => setIsAnalyzing(false), 500);
+    setHistogram(makeHistogram(json.histogram));
+    setTopFlagged(json.top || []);
+    setProgress(100);
   }
-}
+
+  async function analyzeMultipleThreads() {
+    setIsAnalyzing(true);
+    setProgress(0);
+
+    const total = multiFiles.length;
+    let current = 0;
+
+    function stepProgress() {
+      const target = Math.round(((current + 0.5) / total) * 100);
+      setProgress((p) => (p < target ? target : p));
+    }
+
+    try {
+      const results = [];
+
+      for (const file of multiFiles) {
+        const res = await fetch(`${BASE_URL}/analyze-file`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file, text_col: "txt", model: selectedModel }),
+        });
+
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Analysis failed");
+
+        results.push({ filename: file, summary: { mean: json.mean } });
+
+        current++;
+        stepProgress();
+        await new Promise((r) => setTimeout(r, 200));
+      }
+
+      setProgress(100);
+
+      setMultiResults(results);
+      setShowMulti(true);
+    } catch (err) {
+      alert("Multi-analysis failed: " + err.message);
+    } finally {
+      setTimeout(() => setIsAnalyzing(false), 500);
+    }
+  }
+
+  // ====================================
+  // ADDED FOR THREAD SEARCH
+  // ====================================
+  async function handleThreadSearch() {
+    if (!searchThread.trim()) {
+      alert("Enter a thread ID.");
+      return;
+    }
+
+    try {
+      const res = await fetchJson(`${BASE_URL}/search_thread`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thread_id: searchThread }),
+      });
+
+      if (res.found) {
+        setThreadResults(res.rows);
+      } else {
+        setThreadResults([]);
+        alert("Thread ID not found.");
+      }
+    } catch (err) {
+      alert("Search failed: " + err.message);
+    }
+  }
 
   return (
     <>
@@ -321,6 +353,14 @@ setProgress(100);
         selectedModel={selectedModel}
         setSelectedModel={handleModelChange}
         modelName={selectedModel}
+
+        // ====================================
+        // ADDED FOR THREAD SEARCH
+        // ====================================
+        searchThread={searchThread}
+        setSearchThread={setSearchThread}
+        handleThreadSearch={handleThreadSearch}
+        threadResults={threadResults}
       />
 
       {showMultiModal && (
