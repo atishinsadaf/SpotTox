@@ -40,7 +40,13 @@ export default function MainUI({
   models,
   selectedModel,
   setSelectedModel,
-  modelName
+  modelName,
+
+  // REDDIT NEW PROPS
+  makeHistogram,
+  setSummary,
+  setHistogram,
+  setTopFlagged
 }) {
 
   const [showChat, setShowChat] = useState(false);
@@ -48,6 +54,14 @@ export default function MainUI({
   // SEARCH THREAD STATE
   const [showSearch, setShowSearch] = useState(false);
   const [searchThread, setSearchThread] = useState("");
+
+  // REDDIT STATE
+  const [showReddit, setShowReddit] = useState(false);
+  const [redditURL, setRedditURL] = useState("");
+
+  // NEW for Reddit progress bar
+  const [redditLoading, setRedditLoading] = useState(false);
+  const [redditProgress, setRedditProgress] = useState(0);
 
   const btn = (color) => ({
     padding: "12px 20px",
@@ -122,7 +136,6 @@ export default function MainUI({
         }}
       >
 
-        {/* CHAT BUTTON (MOVED HERE) */}
         <button
           onClick={() => setShowChat(true)}
           style={{
@@ -139,7 +152,6 @@ export default function MainUI({
           Chat Mode
         </button>
 
-        {/* RECENT UPLOADS BUTTON */}
         <button
           onClick={() => setShowRecent(!showRecent)}
           style={{
@@ -277,7 +289,7 @@ export default function MainUI({
           </select>
         </div>
 
-        {/* UPLOAD BUTTONS — UPDATED */}
+        {/* UPLOAD BUTTONS */}
         <div
           style={{
             display: "flex",
@@ -287,8 +299,6 @@ export default function MainUI({
             marginBottom: 10,
           }}
         >
-
-          {/* Upload Dataset */}
           <label
             style={{
               ...btn("red"),
@@ -306,7 +316,6 @@ export default function MainUI({
             <span style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
               For larger files containing many threads
             </span>
-
             <input
               type="file"
               accept=".csv,.txt,.json"
@@ -315,7 +324,6 @@ export default function MainUI({
             />
           </label>
 
-          {/* NEW Upload Thread */}
           <label
             style={{
               ...btn("red"),
@@ -325,7 +333,7 @@ export default function MainUI({
               alignItems: "center",
               paddingTop: 10,
               paddingBottom: 10,
-              background: "linear-gradient(90deg,#b91c1c,#dc2626)"
+              background: "linear-gradient(90deg,#b91c1c,#dc2626)",
             }}
           >
             <span style={{ fontSize: 16, fontWeight: 700 }}>
@@ -343,7 +351,6 @@ export default function MainUI({
             />
           </label>
 
-          {/* Upload Multiple */}
           <label style={{ ...btn("blue"), width: 220, textAlign: "center" }}>
             Upload Multiple
             <input
@@ -354,8 +361,24 @@ export default function MainUI({
               onChange={handleMultiUpload}
             />
           </label>
-
         </div>
+
+        {/* REDDIT BUTTON */}
+        <button
+          onClick={() => setShowReddit(true)}
+          style={{
+            marginTop: 16,
+            padding: "12px 20px",
+            background: "linear-gradient(90deg,#ff4500,#ff6a00)",
+            color: "white",
+            borderRadius: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+          }}
+        >
+          Analyze Reddit Link
+        </button>
 
         {/* SEARCH THREAD BUTTON */}
         {(file || multiFiles.length > 0) && (
@@ -409,12 +432,181 @@ export default function MainUI({
                 style={{
                   width: `${progress}%`,
                   height: "100%",
-                  background: "linear-gradient(90deg, #16a34a, #22c55e)",
+                  background:
+                    "linear-gradient(90deg, #16a34a, #22c55e)",
                 }}
               />
             </div>
-            <div style={{ marginTop: 8, color: "#9ca3af", fontSize: 12 }}>
+            <div
+              style={{ marginTop: 8, color: "#9ca3af", fontSize: 12 }}
+            >
               Analyzing… {progress}%
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================
+            REDDIT MODAL WITH PROGRESS BAR CHANGE
+        ====================================================== */}
+        {showReddit && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              background: "rgba(0,0,0,0.6)",
+              zIndex: 99999,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <div
+              style={{
+                background: "#1f2937",
+                padding: 25,
+                borderRadius: 12,
+                width: "90%",
+                maxWidth: 500,
+                boxShadow: "0 12px 30px rgba(0,0,0,0.8)",
+              }}
+            >
+              <button
+                onClick={() => !redditLoading && setShowReddit(false)}
+                style={{
+                  float: "right",
+                  background: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  cursor: redditLoading ? "not-allowed" : "pointer",
+                }}
+              >
+                Close
+              </button>
+
+              <h2 style={{ marginBottom: 15, textAlign: "center" }}>
+                Analyze Reddit Thread
+              </h2>
+
+              <input
+                type="text"
+                placeholder="Paste Reddit link here"
+                value={redditURL}
+                disabled={redditLoading}
+                onChange={(e) => setRedditURL(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: 8,
+                  border: "1px solid #374151",
+                  background: "#111827",
+                  color: "white",
+                  marginBottom: 12,
+                }}
+              />
+
+              {/* =============== ANALYZE BUTTON becomes PROGRESS BAR =============== */}
+              {!redditLoading ? (
+                <button
+                  onClick={async () => {
+                    if (!redditURL.trim()) {
+                      alert("Please paste a Reddit link.");
+                      return;
+                    }
+
+                    setRedditLoading(true);
+                    setRedditProgress(0);
+
+                    // Fake progress animation
+                    const interval = setInterval(() => {
+                      setRedditProgress((p) =>
+                        Math.min(90, p + Math.random() * 3 + 1)
+                      );
+                    }, 300);
+
+                    try {
+                      const res = await fetch("http://127.0.0.1:5001/analyze_reddit", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                          url: redditURL,
+                          model: selectedModel,
+                        }),
+                      });
+
+                      const data = await res.json();
+
+                      clearInterval(interval);
+
+                      if (!res.ok) {
+                        alert(data.error || "Analysis failed.");
+                        setRedditLoading(false);
+                        return;
+                      }
+
+                      setRedditProgress(100);
+
+                      setTimeout(() => {
+                        setRedditLoading(false);
+                        setShowReddit(false);
+
+                        setSummary({
+                          mean: data.mean,
+                          p90: data.p90,
+                          p95: data.p95,
+                          max: data.max,
+                        });
+
+                        setHistogram(makeHistogram(data.histogram));
+                        setTopFlagged(data.top || []);
+
+                        setShowChart(true);
+                      }, 400);
+                    } catch (err) {
+                      clearInterval(interval);
+                      setRedditLoading(false);
+                      alert("Backend error: " + err.message);
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    background: "linear-gradient(90deg,#ff4500,#ff6a00)",
+                    color: "white",
+                    borderRadius: 10,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Analyze
+                </button>
+              ) : (
+                <div
+                  style={{
+                    width: "100%",
+                    height: 14,
+                    background: "#0f172a",
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    boxShadow: "inset 0 0 6px rgba(0,0,0,0.6)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${redditProgress}%`,
+                      height: "100%",
+                      background: "linear-gradient(90deg,#ff4500,#ff6a00)",
+                      transition: "width 0.2s ease",
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -492,7 +684,9 @@ export default function MainUI({
                   try {
                     const res = await fetch("http://127.0.0.1:5001/search_thread", {
                       method: "POST",
-                      headers: { "Content-Type": "application/json" },
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
                       body: JSON.stringify({ thread_id: searchThread }),
                     });
 
@@ -503,15 +697,13 @@ export default function MainUI({
                     } else {
                       alert(
                         `Thread ID: ${data.thread_id}\n` +
-                        `Number of comments: ${data.count}\n` +
-                        `Mean toxicity: ${data.mean.toFixed(3)}\n` +
-                        `P90 toxicity: ${data.p90.toFixed(3)}\n` +
-                        `P95 toxicity: ${data.p95.toFixed(3)}\n` +
-                        `Max toxicity: ${data.max.toFixed(3)}`
+                          `Number of comments: ${data.count}\n` +
+                          `Mean toxicity: ${data.mean.toFixed(3)}\n` +
+                          `P90 toxicity: ${data.p90.toFixed(3)}\n` +
+                          `P95 toxicity: ${data.p95.toFixed(3)}\n` +
+                          `Max toxicity: ${data.max.toFixed(3)}`
                       );
-                      console.log("Thread stats:", data);
                     }
-
                   } catch (err) {
                     alert("Backend error: " + err.message);
                   }
@@ -593,7 +785,9 @@ export default function MainUI({
 
       </main>
 
-      {/* CHART MODAL */}
+      {/* ======================================================
+          CHART MODAL
+      ====================================================== */}
       <ChartModal
         open={showChart}
         onClose={() => {
@@ -619,6 +813,56 @@ export default function MainUI({
           >
             {binDetail.from?.toFixed(3)} – {binDetail.to?.toFixed(3)} • Count:{" "}
             {binDetail.count}
+          </div>
+        )}
+
+        {/* ===================== SCROLLABLE FLAGGED COMMENTS ===================== */}
+        {topFlagged && topFlagged.length > 0 && (
+          <div
+            style={{
+              marginTop: 20,
+              maxHeight: "250px",
+              overflowY: "auto",
+              paddingRight: 10,
+            }}
+          >
+            <h3 style={{ color: "white", marginBottom: 10, fontWeight: 800 }}>
+              Most Toxic Comments
+            </h3>
+
+            {topFlagged.map((item, idx) => (
+              <div
+                key={idx}
+                style={{
+                  background: "#1f2937",
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  marginBottom: 10,
+                  boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
+                  color: "white",
+                }}
+              >
+                <div
+                  style={{
+                    color: "#f87171",
+                    fontWeight: 700,
+                    marginBottom: 6,
+                  }}
+                >
+                  Score: {item.score?.toFixed(3)}
+                </div>
+                <div
+                  style={{
+                    fontSize: 14,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    color: "#d1d5db",
+                  }}
+                >
+                  {item.text}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </ChartModal>
