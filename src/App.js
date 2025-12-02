@@ -273,7 +273,7 @@ export default function App() {
         const res = await fetch(`${BASE_URL}/analyze-file`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: file, text_col: "txt", model: selectedModel }),
+          body: JSON.stringify({ filename: file, text_col: "text", model: selectedModel }),
         });
 
         const json = await res.json();
@@ -355,12 +355,20 @@ export default function App() {
         modelName={selectedModel}
 
         // ====================================
-        // ADDED FOR THREAD SEARCH
+        // THREAD SEARCH
         // ====================================
         searchThread={searchThread}
         setSearchThread={setSearchThread}
         handleThreadSearch={handleThreadSearch}
         threadResults={threadResults}
+
+        // ====================================
+        // REDDIT SEARCH
+        // ====================================
+        makeHistogram={makeHistogram}
+        setSummary={setSummary}
+        setHistogram={setHistogram}
+        setTopFlagged={setTopFlagged}
       />
 
       {showMultiModal && (
