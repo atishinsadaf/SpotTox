@@ -1,4 +1,5 @@
 # app.py - SpotTox Backend Server
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os, json
@@ -422,6 +423,79 @@ def search_thread():
         "p95": float(np.quantile(toxicity, 0.95)),
         "max": float(toxicity.max()),
     })
+
+@app.post("/analyze_reddit")
+def analyze_reddit():
+    data = request.get_json()
+    url = data.get("url", "").strip()
+    model_override = data.get("model", current_model_name)
+
+    if not url:
+        return {"error": "No URL provided"}, 400
+
+    # Extract Reddit thread ID
+    try:
+        parts = url.split("/comments/")
+        thread_part = parts[1].split("/")[0]
+        thread_id = thread_part.strip()
+    except:
+        return {"error": "Invalid Reddit URL"}, 400
+
+    # Fetch Reddit JSON
+    json_url = f"https://www.reddit.com/comments/{thread_id}.json"
+
+    headers = {"User-agent": "SpotToxBot/1.0"}
+    res = requests.get(json_url, headers=headers)
+
+    if res.status_code != 200:
+        return {"error": "Reddit API error"}, 400
+
+    try:
+        data = res.json()
+    except:
+        return {"error": "Could not parse Reddit JSON"}, 400
+
+    # Extract all comments
+    comments = []
+    try:
+        listing = data[1]["data"]["children"]
+        for c in listing:
+            if c["kind"] == "t1":  # normal comment
+                txt = c["data"].get("body", "")
+                if txt.strip():
+                    comments.append(txt)
+    except:
+        return {"error": "Failed extracting comments"}, 400
+
+    if not comments:
+        return {"error": "No comments found in thread"}, 400
+
+    # Switch model
+    if model_override != current_model_name:
+        load_model(model_override)
+
+    # Score them
+    scores = score_texts(current_tok, current_mdl, comments)
+
+    # Handle LSTM dict output
+    if isinstance(scores[0], dict):
+        toxicity = np.array([s["toxicity"] for s in scores])
+    else:
+        toxicity = np.array(scores)
+
+    return {
+        "model": current_model_name,
+        "count": len(toxicity),
+        "mean": float(toxicity.mean()),
+        "p90": float(np.quantile(toxicity, 0.9)),
+        "p95": float(np.quantile(toxicity, 0.95)),
+        "max": float(toxicity.max()),
+        "histogram": toxicity.tolist(),
+        "top": [
+            {"text": comments[i][:200], "score": float(toxicity[i])}
+            for i in np.argsort(-toxicity)[:10]
+        ]
+    }
 
 
 if __name__ == "__main__":
