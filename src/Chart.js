@@ -180,7 +180,7 @@ export function Histogram({ data, onBinClick }) {
           </div>
         </div>
         <div style={{ marginTop: "8px", fontStyle: "italic" }}>
-          💡 Click on any bar for details • Hover for quick info
+        💡 Click on any bar for details • Hover for quick info
         </div>
       </div>
     </div>
@@ -205,10 +205,11 @@ export function ChartModal({ open, onClose, title, modelName, children }) {
         background: "rgba(0,0,0,0.75)",
         backdropFilter: "blur(4px)",
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "center",
         padding: 16,
         animation: "fadeIn 0.2s ease",
+        overflowY: "auto",
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose?.();
@@ -228,6 +229,8 @@ export function ChartModal({ open, onClose, title, modelName, children }) {
       <div
         style={{
           width: "min(780px, 95vw)",
+          maxHeight: "90vh",
+          overflowY: "auto",
           background: "linear-gradient(135deg, #1f2937 0%, #111827 100%)",
           color: "white",
           borderRadius: 20,
@@ -236,6 +239,8 @@ export function ChartModal({ open, onClose, title, modelName, children }) {
           position: "relative",
           border: "1px solid #374151",
           animation: "slideUp 0.3s ease",
+          marginTop: 20,
+          marginBottom: 20,
         }}
       >
         <button
@@ -364,9 +369,9 @@ export default function ChartDemo() {
               color: "#e5e7eb"
             }}>
               <div style={{ fontWeight: "700", marginBottom: "8px", color: "#60a5fa" }}>
-                📍 Selected Range
+              📍 Selected Range
               </div>
-              <div>Score Range: {binDetail.from.toFixed(3)} – {binDetail.to.toFixed(3)}</div>
+              <div>Score Range: {binDetail.from.toFixed(3)} â€“ {binDetail.to.toFixed(3)}</div>
               <div>Message Count: {binDetail.count}</div>
             </div>
           )}
@@ -396,7 +401,7 @@ export default function ChartDemo() {
           borderRadius: "16px",
           color: "#e5e7eb"
         }}>
-          <h2 style={{ color: "#f3f4f6", marginTop: 0 }}>Features Added ✨</h2>
+          <h2 style={{ color: "#f3f4f6", marginTop: 0 }}>Features Added âœ¨</h2>
           <ul style={{ lineHeight: "1.8" }}>
             <li><strong>Interactive bars:</strong> Click to see detailed range information</li>
             <li><strong>Hover effects:</strong> Instant visual feedback and tooltips</li>
@@ -433,7 +438,7 @@ export default function ChartDemo() {
             borderRadius: "8px",
             fontWeight: "600"
           }}>
-            Selected: {binDetail.from.toFixed(3)} – {binDetail.to.toFixed(3)} • Count: {binDetail.count}
+            Selected: {binDetail.from.toFixed(3)} â€“ {binDetail.to.toFixed(3)} â€¢ Count: {binDetail.count}
           </div>
         )}
       </ChartModal>

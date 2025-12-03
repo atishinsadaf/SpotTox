@@ -40,7 +40,8 @@ export default function App() {
     () => [
       "AI-powered early warning detection for toxic conversations.",
       "Predict toxicity before it spreads.",
-      "Safer online spaces.",
+      "Safer online spaces start here.",
+      "One click to know: Is it toxic?",
     ],
     []
   );
@@ -61,21 +62,25 @@ export default function App() {
   const [histogram, setHistogram] = useState(null);
   const [topFlagged, setTopFlagged] = useState([]);
 
+  // Message and thread counts
+  const [messageCount, setMessageCount] = useState(null);
+  const [threadCount, setThreadCount] = useState(null);
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState("");
   const [multiResults, setMultiResults] = useState(null);
 
   const [showChart, setShowChart] = useState(false);
   const [binDetail, setBinDetail] = useState(null);
 
+  // Quick result state for "Is It Toxic?" button
+  const [quickResult, setQuickResult] = useState(null);
+
   const showMultiModal = showMulti && multiResults;
 
-  // ADDED FOR THREAD SEARCH POPUP
+  // Thread search state
   const [showThreadSearch, setShowThreadSearch] = useState(false);
-
-  // ====================================
-  // ADDED FOR THREAD SEARCH (STATE)
-  // ====================================
   const [searchThread, setSearchThread] = useState("");
   const [threadResults, setThreadResults] = useState([]);
 
@@ -139,7 +144,7 @@ export default function App() {
     });
   }
 
-  // Upload
+  // Upload single file
   function handleUpload(e) {
     const f = e.target.files[0];
     if (!f) return;
@@ -149,6 +154,101 @@ export default function App() {
     clearResults();
   }
 
+  // Handle image/screenshot upload with OCR
+  async function handleImageUpload(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    
+    setFile(f);
+    setUploadedName(f.name);
+    setMultiFiles([]);
+    clearResults();
+    setIsAnalyzing(true);
+    setProgress(0);
+    setProgressMessage("Uploading image...");
+
+    try {
+      // Upload the image
+      const form = new FormData();
+      form.append("file", f);
+      setProgress(20);
+
+      const upRes = await fetch(`${BASE_URL}/upload-image`, {
+        method: "POST",
+        body: form,
+      });
+
+      const upJson = await upRes.json();
+      if (!upRes.ok) throw new Error(upJson.error || "Upload failed");
+
+      setProgress(40);
+      setProgressMessage("Extracting text from image (OCR)...");
+
+      // Analyze the image
+      const analyzeRes = await fetch(`${BASE_URL}/analyze-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: upJson.filename,
+          model: selectedModel,
+        }),
+      });
+
+      const analyzeJson = await analyzeRes.json();
+      
+      if (!analyzeRes.ok) {
+        // Check if it's an OCR not available error
+        if (analyzeJson.install_instructions) {
+          alert(`⚠️ ${analyzeJson.error}\n\n${analyzeJson.install_instructions}`);
+        } else {
+          alert(`Analysis failed: ${analyzeJson.error}`);
+        }
+        throw new Error(analyzeJson.error);
+      }
+
+      setProgress(80);
+      setProgressMessage("Processing results...");
+
+      // Add to recent
+      setRecent((prev) => [
+        { name: f.name, time: new Date().toLocaleString() },
+        ...prev.slice(0, 8),
+      ]);
+
+      // Set the results
+      setSummary({
+        mean: analyzeJson.mean,
+        p90: analyzeJson.p90,
+        p95: analyzeJson.p95,
+        max: analyzeJson.max,
+      });
+      setHistogram(makeHistogram(analyzeJson.histogram));
+      setTopFlagged(analyzeJson.top || []);
+      setMessageCount(analyzeJson.message_count);
+      setThreadCount(analyzeJson.thread_count);
+
+      setProgress(100);
+      setProgressMessage("Analysis complete!");
+
+      // Show quick result
+      setQuickResult({
+        mean: analyzeJson.mean,
+        messageCount: analyzeJson.message_count,
+        threadCount: 1,
+      });
+
+    } catch (err) {
+      console.error("Image analysis error:", err);
+      setProgressMessage("Analysis failed");
+    } finally {
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setProgressMessage("");
+      }, 500);
+    }
+  }
+
+  // Upload multiple files
   async function handleMultiUpload(e) {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -173,28 +273,119 @@ export default function App() {
     setHistogram(null);
     setTopFlagged([]);
     setShowChart(false);
+    setQuickResult(null);
+    setMessageCount(null);
+    setThreadCount(null);
   }
 
-  // Analyze single thread
+  // Quick check handler, simple "Is It Toxic?" answer
+  async function handleQuickCheck() {
+    if (!file) return;
+
+    try {
+      // First upload the file
+      const form = new FormData();
+      form.append("file", file);
+
+      const upRes = await fetch(`${BASE_URL}/upload`, {
+        method: "POST",
+        body: form,
+      });
+
+      const upJson = await upRes.json();
+      if (!upRes.ok) throw new Error(upJson.error || "Upload failed");
+
+      const filename = upJson.filename;
+      setUploadedName(filename);
+
+      // Add to recent
+      setRecent((prev) => [
+        { name: filename, time: new Date().toLocaleString() },
+        ...prev.slice(0, 8),
+      ]);
+
+      // Analyze the file - try "text" first, then "txt"
+      let textCol = "text";
+      let res = await fetch(`${BASE_URL}/analyze-file`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename,
+          text_col: textCol,
+          model: selectedModel,
+        }),
+      });
+
+      let json = await res.json();
+
+      // If "text" column failed, try "txt"
+      if (!res.ok && json.error?.includes("missing")) {
+        textCol = "txt";
+        res = await fetch(`${BASE_URL}/analyze-file`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename,
+            text_col: textCol,
+            model: selectedModel,
+          }),
+        });
+        json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Analysis failed");
+      }
+
+      if (!res.ok) throw new Error(json.error || "Analysis failed");
+
+      // Process results for quick check
+      let mean, msgCount;
+      
+      if (Array.isArray(json.scores) && typeof json.scores[0] === "object") {
+        // LSTM case
+        const toxicityScores = json.scores.map((s) => s.toxicity ?? 0);
+        mean = toxicityScores.reduce((a, b) => a + b, 0) / toxicityScores.length;
+        msgCount = toxicityScores.length;
+      } else {
+        // BERT/RoBERTa case
+        mean = json.mean;
+        msgCount = json.histogram?.length || 0;
+      }
+
+      // Store full results for later if user wants to see charts
+      processAnalysisResults(json);
+
+      // Set quick result
+      setQuickResult({
+        mean: mean,
+        messageCount: msgCount,
+        threadCount: 1,
+      });
+
+    } catch (err) {
+      alert("Analysis failed: " + err.message);
+    }
+  }
+
+  // Analyze single thread (full analysis with charts)
   async function handleAnalyze() {
     if (!file) return;
     setIsAnalyzing(true);
     setProgress(0);
-
-    const interval = setInterval(
-      () => setProgress((p) => Math.min(90, Math.round(p + Math.random() * 18 + 7))),
-      350
-    );
+    setProgressMessage("Uploading file...");
 
     try {
       const form = new FormData();
       form.append("file", file);
+      setProgress(10);
+
       const upRes = await fetch(`${BASE_URL}/upload`, {
         method: "POST",
         body: form,
       });
       const upJson = await upRes.json();
       if (!upRes.ok) throw new Error(upJson.error || "Upload failed");
+
+      setProgress(20);
+      setProgressMessage("File uploaded successfully!");
       const filename = upJson.filename;
 
       setUploadedName(filename);
@@ -203,28 +394,69 @@ export default function App() {
         ...prev.slice(0, 8),
       ]);
 
+      setProgressMessage("Tokenizing text data...");
+      setProgress(40);
+      await new Promise((r) => setTimeout(r, 500));
+
+      setProgressMessage(`Running ${selectedModel} model...`);
+      setProgress(60);
       await analyzeFilename(filename);
+
+      setProgressMessage("Generating visualizations...");
+      setProgress(90);
+      await new Promise((r) => setTimeout(r, 400));
+
+      setProgress(100);
+      setProgressMessage("Analysis complete!");
+      await new Promise((r) => setTimeout(r, 400));
+
       setShowChart(true);
     } catch (err) {
       alert(err.message);
+      setProgressMessage("Analysis failed!");
     } finally {
-      clearInterval(interval);
-      setTimeout(() => setIsAnalyzing(false), 350);
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setProgressMessage("");
+      }, 500);
     }
   }
 
   // Core analyze call
   async function analyzeFilename(filename) {
+    // Try "text" first, then "txt"
+    let textCol = "text";
+    
     const res = await fetch(`${BASE_URL}/analyze-file`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename, text_col: "text", model: selectedModel }),
+      body: JSON.stringify({ filename, text_col: textCol, model: selectedModel }),
     });
 
     const json = await res.json();
+    
+    // If "text" column failed, try "txt"
+    if (!res.ok && json.error?.includes("missing")) {
+      textCol = "txt";
+      const res2 = await fetch(`${BASE_URL}/analyze-file`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, text_col: textCol, model: selectedModel }),
+      });
+      const json2 = await res2.json();
+      if (!res2.ok) throw new Error(json2.error || "Analysis failed");
+      
+      processAnalysisResults(json2);
+      return;
+    }
+    
     if (!res.ok) throw new Error(json.error || "Analysis failed");
+    processAnalysisResults(json);
+  }
 
-    // LSTM returns full label dict extract toxicity list
+  // Process analysis results (handles both LSTM and BERT/RoBERTa)
+  function processAnalysisResults(json) {
+    // LSTM returns full label dict - extract toxicity list
     if (Array.isArray(json.scores) && typeof json.scores[0] === "object") {
       const toxicityScores = json.scores.map((s) => s.toxicity ?? 0);
 
@@ -237,6 +469,7 @@ export default function App() {
       setSummary({ mean, p90, p95, max });
       setHistogram(makeHistogram(toxicityScores));
       setTopFlagged(json.top || []);
+      setMessageCount(toxicityScores.length);
       setProgress(100);
       return;
     }
@@ -251,12 +484,19 @@ export default function App() {
 
     setHistogram(makeHistogram(json.histogram));
     setTopFlagged(json.top || []);
+    
+    // Set message count from histogram length
+    if (json.histogram) {
+      setMessageCount(json.histogram.length);
+    }
     setProgress(100);
   }
 
+  // Analyze multiple threads
   async function analyzeMultipleThreads() {
     setIsAnalyzing(true);
     setProgress(0);
+    setProgressMessage("Starting batch analysis...");
 
     const total = multiFiles.length;
     let current = 0;
@@ -270,13 +510,26 @@ export default function App() {
       const results = [];
 
       for (const file of multiFiles) {
-        const res = await fetch(`${BASE_URL}/analyze-file`, {
+        setProgressMessage(`Analyzing ${current + 1}/${total}: ${file}`);
+
+        // Try "text" first, then "txt"
+        let res = await fetch(`${BASE_URL}/analyze-file`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ filename: file, text_col: "text", model: selectedModel }),
         });
 
-        const json = await res.json();
+        let json = await res.json();
+        
+        if (!res.ok && json.error?.includes("missing")) {
+          res = await fetch(`${BASE_URL}/analyze-file`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: file, text_col: "txt", model: selectedModel }),
+          });
+          json = await res.json();
+        }
+        
         if (!res.ok) throw new Error(json.error || "Analysis failed");
 
         results.push({ filename: file, summary: { mean: json.mean } });
@@ -287,19 +540,23 @@ export default function App() {
       }
 
       setProgress(100);
+      setProgressMessage("Batch analysis complete!");
 
       setMultiResults(results);
       setShowMulti(true);
+      setThreadCount(results.length);
     } catch (err) {
       alert("Multi-analysis failed: " + err.message);
+      setProgressMessage("Batch analysis failed!");
     } finally {
-      setTimeout(() => setIsAnalyzing(false), 500);
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setProgressMessage("");
+      }, 500);
     }
   }
 
-  // ====================================
-  // ADDED FOR THREAD SEARCH
-  // ====================================
+  // Thread search handler
   async function handleThreadSearch() {
     if (!searchThread.trim()) {
       alert("Enter a thread ID.");
@@ -338,13 +595,20 @@ export default function App() {
         multiFiles={multiFiles}
         handleUpload={handleUpload}
         handleMultiUpload={handleMultiUpload}
+        handleImageUpload={handleImageUpload}
         handleAnalyze={handleAnalyze}
+        handleQuickCheck={handleQuickCheck}
         analyzeMultipleThreads={analyzeMultipleThreads}
         isAnalyzing={isAnalyzing}
         progress={progress}
+        progressMessage={progressMessage}
         summary={summary}
         histogram={histogram}
         topFlagged={topFlagged}
+        messageCount={messageCount}
+        threadCount={threadCount}
+        quickResult={quickResult}
+        setQuickResult={setQuickResult}
         showChart={showChart}
         setShowChart={setShowChart}
         binDetail={binDetail}
@@ -354,17 +618,13 @@ export default function App() {
         setSelectedModel={handleModelChange}
         modelName={selectedModel}
 
-        // ====================================
-        // THREAD SEARCH
-        // ====================================
+        // TEAMMATE'S: Thread search props
         searchThread={searchThread}
         setSearchThread={setSearchThread}
         handleThreadSearch={handleThreadSearch}
         threadResults={threadResults}
 
-        // ====================================
-        // REDDIT SEARCH
-        // ====================================
+        // Reddit/histogram helpers
         makeHistogram={makeHistogram}
         setSummary={setSummary}
         setHistogram={setHistogram}

@@ -18,17 +18,26 @@ export default function MainUI({
   multiFiles,
   handleUpload,
   handleMultiUpload,
+  handleImageUpload,
 
   // analysis
   handleAnalyze,
   analyzeMultipleThreads,
+  handleQuickCheck,
 
   // state
   isAnalyzing,
   progress,
+  progressMessage,
   summary,
   histogram,
   topFlagged,
+  messageCount,
+  threadCount,
+
+  // quick check result
+  quickResult,
+  setQuickResult,
 
   // chart
   showChart,
@@ -51,29 +60,37 @@ export default function MainUI({
 
   const [showChat, setShowChat] = useState(false);
 
-  // SEARCH THREAD STATE
+  // Search Thread State
   const [showSearch, setShowSearch] = useState(false);
   const [searchThread, setSearchThread] = useState("");
 
-  // REDDIT STATE
+  // Reddit State
   const [showReddit, setShowReddit] = useState(false);
   const [redditURL, setRedditURL] = useState("");
 
-  // NEW for Reddit progress bar
+  // Reddit progress bar
   const [redditLoading, setRedditLoading] = useState(false);
   const [redditProgress, setRedditProgress] = useState(0);
+
+  // Quick check loading state
+  const [quickLoading, setQuickLoading] = useState(false);
 
   const btn = (color) => ({
     padding: "12px 20px",
     background:
       color === "red"
         ? "linear-gradient(90deg,#dc2626,#ef4444)"
+        : color === "green"
+        ? "linear-gradient(90deg,#16a34a,#22c55e)"
+        : color === "orange"
+        ? "linear-gradient(90deg,#ea580c,#f97316)"
         : "linear-gradient(90deg,#4f46e5,#6366f1)",
     color: "white",
     borderRadius: "12px",
     cursor: "pointer",
     fontWeight: 600,
     boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+    border: "none",
   });
 
   const analyzeBtn = {
@@ -84,6 +101,7 @@ export default function MainUI({
     borderRadius: "12px",
     fontWeight: 700,
     cursor: "pointer",
+    border: "none",
   };
 
   const spinner = {
@@ -107,19 +125,78 @@ export default function MainUI({
     boxShadow: "inset 0 0 6px rgba(0,0,0,0.6)",
   };
 
+  // Helper function to get toxicity verdict
+  const getToxicityVerdict = (score) => {
+    if (score < 0.3) return { label: "SAFE", color: "#22c55e", emoji: "✅" };
+    if (score < 0.5) return { label: "LOW RISK", color: "#84cc16", emoji: "⚠️" };
+    if (score < 0.7) return { label: "MODERATE", color: "#f59e0b", emoji: "⚠️" };
+    if (score < 0.85) return { label: "TOXIC", color: "#ef4444", emoji: "🚨" };
+    return { label: "HIGHLY TOXIC", color: "#dc2626", emoji: "🚫" };
+  };
+
   return (
     <div
       style={{
         position: "relative",
         display: "flex",
         justifyContent: "center",
-        alignItems: "center",
-        height: "100vh",
-        overflow: "hidden",
+        alignItems: "flex-start",
+        minHeight: "100vh",
+        overflow: "auto",
         background:
           "linear-gradient(135deg, #000000, #111827, #1f2937, #000000)",
+        padding: "20px 0",
       }}
     >
+      {/* Keyframes for spinner */}
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        .gradient-text {
+          background: linear-gradient(90deg, #ef4444, #f97316, #eab308);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+        .caret {
+          animation: blink 1s step-end infinite;
+        }
+        @keyframes blink {
+          50% { opacity: 0; }
+        }
+        .pulse-btn {
+          animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+          50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+        
+        /* Responsive styles */
+        @media (max-width: 600px) {
+          main {
+            padding: 20px !important;
+            margin: 10px !important;
+          }
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+          width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+          background: #1f2937;
+          border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #4b5563;
+          border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: #6b7280;
+        }
+      `}</style>
 
       {/* ------------------------------------------------------
           TOP RIGHT: CHAT MODE + RECENT UPLOADS
@@ -149,7 +226,7 @@ export default function MainUI({
             boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
           }}
         >
-          Chat Mode
+          💬 Chat Mode
         </button>
 
         <button
@@ -165,7 +242,7 @@ export default function MainUI({
             boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
           }}
         >
-          Recent uploads ▾
+          📁 Recent ▾
         </button>
 
         {showRecent && (
@@ -228,17 +305,20 @@ export default function MainUI({
       ------------------------------------------------------ */}
       <main
         style={{
-          padding: 40,
+          padding: "30px 40px",
           borderRadius: 16,
           background: "#111827",
           color: "white",
           textAlign: "center",
-          maxWidth: 520,
+          maxWidth: 560,
           width: "90%",
+          maxHeight: "90vh",
+          overflowY: "auto",
           boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
+          margin: "auto",
         }}
       >
-        <h1 style={{ marginBottom: 12, fontWeight: 800 }}>
+        <h1 style={{ marginBottom: 12, fontWeight: 800, fontSize: 32 }}>
           Welcome to <span className="gradient-text">SpotTox</span>
         </h1>
 
@@ -251,17 +331,17 @@ export default function MainUI({
           }}
         >
           {typed}
-          <span className="caret" style={{ color: "#9ca3af" }} />
+          <span className="caret" style={{ color: "#9ca3af" }}>|</span>
         </p>
 
-        <p style={{ color: "#d1d5db", marginBottom: 10 }}>
-          Time & Date: <strong>{now}</strong>
+        <p style={{ color: "#d1d5db", marginBottom: 10, fontSize: 14 }}>
+          🕐 {now}
         </p>
 
         {/* MODEL SELECTOR */}
         <div style={{ marginBottom: 20 }}>
           <label style={{ color: "#9ca3af", marginRight: 8, fontWeight: 600 }}>
-            Model:
+            🤖 Model:
           </label>
           <select
             value={selectedModel}
@@ -289,6 +369,141 @@ export default function MainUI({
           </select>
         </div>
 
+        {/* ============================================================
+             "IS IT TOXIC?" BUTTON
+        ============================================================ */}
+        {file && !isAnalyzing && !quickLoading && (
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+            <button
+              className="pulse-btn"
+              onClick={async () => {
+                setQuickLoading(true);
+                try {
+                  await handleQuickCheck();
+                } finally {
+                  setQuickLoading(false);
+                }
+              }}
+              style={{
+                ...btn("red"),
+                width: 300,
+                padding: "16px 24px",
+                fontSize: 18,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+              }}
+            >
+              🔍 Is It Toxic?
+            </button>
+          </div>
+        )}
+
+        {quickLoading && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={spinner} />
+            <p style={{ color: "#9ca3af", fontSize: 14 }}>Analyzing toxicity...</p>
+          </div>
+        )}
+
+        {/* ============================================================
+            QUICK RESULT DISPLAY - Shows simple YES/NO answer
+        ============================================================ */}
+        {quickResult && !showChart && (
+          <div
+            style={{
+              marginBottom: 20,
+              padding: 20,
+              borderRadius: 12,
+              background: "#0f172a",
+              border: `2px solid ${getToxicityVerdict(quickResult.mean).color}`,
+            }}
+          >
+            <div style={{ fontSize: 48, marginBottom: 8 }}>
+              {getToxicityVerdict(quickResult.mean).emoji}
+            </div>
+            <div
+              style={{
+                fontSize: 24,
+                fontWeight: 800,
+                color: getToxicityVerdict(quickResult.mean).color,
+                marginBottom: 8,
+              }}
+            >
+              {getToxicityVerdict(quickResult.mean).label}
+            </div>
+            <div style={{ color: "#9ca3af", fontSize: 14, marginBottom: 12 }}>
+              Average Toxicity Score: <strong style={{ color: "white" }}>{(quickResult.mean * 100).toFixed(1)}%</strong>
+            </div>
+            
+            {/* Message and Thread counts */}
+            <div style={{ 
+              display: "flex", 
+              justifyContent: "center", 
+              gap: 20, 
+              marginBottom: 12,
+              flexWrap: "wrap"
+            }}>
+              <div style={{ 
+                background: "#1f2937", 
+                padding: "8px 16px", 
+                borderRadius: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 8
+              }}>
+                <span>💬</span>
+                <span style={{ color: "#d1d5db" }}>
+                  <strong style={{ color: "white" }}>{quickResult.messageCount || 0}</strong> messages
+                </span>
+              </div>
+              {quickResult.threadCount > 1 && (
+                <div style={{ 
+                  background: "#1f2937", 
+                  padding: "8px 16px", 
+                  borderRadius: 8,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8
+                }}>
+                  <span>🧵</span>
+                  <span style={{ color: "#d1d5db" }}>
+                    <strong style={{ color: "white" }}>{quickResult.threadCount}</strong> threads
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+              <button
+                onClick={() => {
+                  setQuickResult(null);
+                  setShowChart(true);
+                }}
+                style={{
+                  ...btn("blue"),
+                  padding: "10px 16px",
+                  fontSize: 14,
+                }}
+              >
+                📊 View Full Analysis
+              </button>
+              <button
+                onClick={() => setQuickResult(null)}
+                style={{
+                  ...btn("green"),
+                  padding: "10px 16px",
+                  fontSize: 14,
+                  background: "#374151",
+                }}
+              >
+                ✕ Close
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* UPLOAD BUTTONS */}
         <div
           style={{
@@ -299,22 +514,23 @@ export default function MainUI({
             marginBottom: 10,
           }}
         >
+          {/* Upload Thread (Single) */}
           <label
             style={{
               ...btn("red"),
-              width: 220,
+              width: 240,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              paddingTop: 10,
-              paddingBottom: 10,
+              paddingTop: 12,
+              paddingBottom: 12,
             }}
           >
-            <span style={{ fontSize: 16, fontWeight: 700 }}>
-              Upload Dataset
+            <span style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+              📄 Upload Thread
             </span>
-            <span style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
-              For larger files containing many threads
+            <span style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>
+              CSV, TXT, or JSON file
             </span>
             <input
               type="file"
@@ -324,35 +540,48 @@ export default function MainUI({
             />
           </label>
 
+          {/* Upload Image/Screenshot */}
           <label
             style={{
-              ...btn("red"),
-              width: 220,
+              ...btn("orange"),
+              width: 240,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              paddingTop: 10,
-              paddingBottom: 10,
-              background: "linear-gradient(90deg,#b91c1c,#dc2626)",
+              paddingTop: 12,
+              paddingBottom: 12,
             }}
           >
-            <span style={{ fontSize: 16, fontWeight: 700 }}>
-              Upload Thread
+            <span style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+              📸 Upload Image
             </span>
-            <span style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
-              For smaller files containing 1 thread
+            <span style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>
+              Image of conversation (PNG, JPG, JPEG, GIF)
             </span>
-
             <input
               type="file"
-              accept=".csv,.txt,.json"
+              accept="image/*"
               style={{ display: "none" }}
-              onChange={handleUpload}
+              onChange={handleImageUpload}
             />
           </label>
 
-          <label style={{ ...btn("blue"), width: 220, textAlign: "center" }}>
-            Upload Multiple
+          {/* Upload Multiple */}
+          <label style={{ 
+            ...btn("blue"), 
+            width: 240, 
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            paddingTop: 12,
+            paddingBottom: 12,
+          }}>
+            <span style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+              📚 Upload Multiple
+            </span>
+            <span style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>
+              Compare multiple threads
+            </span>
             <input
               type="file"
               accept=".csv,.txt,.json"
@@ -363,7 +592,7 @@ export default function MainUI({
           </label>
         </div>
 
-        {/* REDDIT BUTTON */}
+        {/* Reddit Button */}
         <button
           onClick={() => setShowReddit(true)}
           style={{
@@ -375,9 +604,16 @@ export default function MainUI({
             fontWeight: 700,
             cursor: "pointer",
             boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+            border: "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            width: 240,
+            margin: "16px auto 0",
           }}
         >
-          Analyze Reddit Link
+          🔗 Analyze Reddit Link
         </button>
 
         {/* SEARCH THREAD BUTTON */}
@@ -385,7 +621,7 @@ export default function MainUI({
           <button
             onClick={() => setShowSearch(true)}
             style={{
-              marginTop: 16,
+              marginTop: 12,
               padding: "12px 20px",
               background: "linear-gradient(90deg,#3b82f6,#6366f1)",
               color: "white",
@@ -393,34 +629,55 @@ export default function MainUI({
               fontWeight: 700,
               cursor: "pointer",
               boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+              border: "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              width: 240,
+              margin: "12px auto 0",
             }}
           >
-            Search Thread
+            🔎 Search Thread by ID
           </button>
         )}
 
         {multiFiles.length > 0 && (
           <div style={{ marginTop: 12, color: "#fca5a5", textAlign: "left" }}>
-            <b>Uploaded Threads:</b>
-            <ul>{multiFiles.map((f, i) => <li key={i}>{f}</li>)}</ul>
+            <b>📂 Uploaded Threads ({multiFiles.length}):</b>
+            <ul style={{ margin: "8px 0", paddingLeft: 20 }}>
+              {multiFiles.map((f, i) => <li key={i} style={{ fontSize: 14 }}>{f}</li>)}
+            </ul>
           </div>
         )}
 
         {uploadedName && (
-          <p style={{ marginTop: 16, color: "#fca5a5" }}>
-            Uploaded: <strong>{uploadedName}</strong>
-          </p>
+          <div style={{ 
+            marginTop: 16, 
+            padding: "12px 16px",
+            background: "#1f2937",
+            borderRadius: 8,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8
+          }}>
+            <span>📄</span>
+            <span style={{ color: "#fca5a5" }}>
+              Uploaded: <strong>{uploadedName}</strong>
+            </span>
+          </div>
         )}
 
-        {file && !isAnalyzing && (
-          <button style={analyzeBtn} onClick={handleAnalyze}>
-            Analyze Thread
+        {file && !isAnalyzing && !quickResult && (
+          <button style={{ ...analyzeBtn, width: 240, margin: "16px auto 0", display: "block" }} onClick={handleAnalyze}>
+            📊 Full Analysis (Charts)
           </button>
         )}
 
         {multiFiles.length >= 2 && !isAnalyzing && (
-          <button style={analyzeBtn} onClick={analyzeMultipleThreads}>
-            Analyze {multiFiles.length} Threads
+          <button style={{ ...analyzeBtn, width: 280, margin: "12px auto 0", display: "block" }} onClick={analyzeMultipleThreads}>
+            📊 Analyze {multiFiles.length} Threads
           </button>
         )}
 
@@ -432,21 +689,19 @@ export default function MainUI({
                 style={{
                   width: `${progress}%`,
                   height: "100%",
-                  background:
-                    "linear-gradient(90deg, #16a34a, #22c55e)",
+                  background: "linear-gradient(90deg, #16a34a, #22c55e)",
+                  transition: "width 0.3s ease",
                 }}
               />
             </div>
-            <div
-              style={{ marginTop: 8, color: "#9ca3af", fontSize: 12 }}
-            >
-              Analyzing… {progress}%
+            <div style={{ marginTop: 8, color: "#9ca3af", fontSize: 12 }}>
+              {progressMessage || `Analyzing… ${progress}%`}
             </div>
           </div>
         )}
 
         {/* ======================================================
-            REDDIT MODAL WITH PROGRESS BAR CHANGE
+            REDDIT MODAL WITH PROGRESS BAR
         ====================================================== */}
         {showReddit && (
           <div
@@ -489,27 +744,27 @@ export default function MainUI({
               </button>
 
               <h2 style={{ marginBottom: 15, textAlign: "center" }}>
-                Analyze Reddit Thread
+                🔗 Analyze Reddit Thread
               </h2>
 
               <input
                 type="text"
-                placeholder="Paste Reddit link here"
+                placeholder="Paste Reddit link here..."
                 value={redditURL}
                 disabled={redditLoading}
                 onChange={(e) => setRedditURL(e.target.value)}
                 style={{
                   width: "100%",
-                  padding: "10px",
+                  padding: "12px",
                   borderRadius: 8,
                   border: "1px solid #374151",
                   background: "#111827",
                   color: "white",
                   marginBottom: 12,
+                  boxSizing: "border-box",
                 }}
               />
 
-              {/* =============== ANALYZE BUTTON becomes PROGRESS BAR =============== */}
               {!redditLoading ? (
                 <button
                   onClick={async () => {
@@ -521,7 +776,6 @@ export default function MainUI({
                     setRedditLoading(true);
                     setRedditProgress(0);
 
-                    // Fake progress animation
                     const interval = setInterval(() => {
                       setRedditProgress((p) =>
                         Math.min(90, p + Math.random() * 3 + 1)
@@ -582,9 +836,10 @@ export default function MainUI({
                     borderRadius: 10,
                     fontWeight: 700,
                     cursor: "pointer",
+                    border: "none",
                   }}
                 >
-                  Analyze
+                  🔍 Analyze
                 </button>
               ) : (
                 <div
@@ -655,22 +910,23 @@ export default function MainUI({
               </button>
 
               <h2 style={{ marginBottom: 15, textAlign: "center" }}>
-                Search Thread by ID
+                🔎 Search Thread by ID
               </h2>
 
               <input
                 type="text"
-                placeholder="Enter thread_id"
+                placeholder="Enter thread_id..."
                 value={searchThread}
                 onChange={(e) => setSearchThread(e.target.value)}
                 style={{
                   width: "100%",
-                  padding: "10px",
+                  padding: "12px",
                   borderRadius: 8,
                   border: "1px solid #374151",
                   background: "#111827",
                   color: "white",
                   marginBottom: 12,
+                  boxSizing: "border-box",
                 }}
               />
 
@@ -695,13 +951,16 @@ export default function MainUI({
                     if (!data.found) {
                       alert("Thread not found in dataset.");
                     } else {
+                      const verdict = getToxicityVerdict(data.mean);
                       alert(
-                        `Thread ID: ${data.thread_id}\n` +
-                          `Number of comments: ${data.count}\n` +
-                          `Mean toxicity: ${data.mean.toFixed(3)}\n` +
-                          `P90 toxicity: ${data.p90.toFixed(3)}\n` +
-                          `P95 toxicity: ${data.p95.toFixed(3)}\n` +
-                          `Max toxicity: ${data.max.toFixed(3)}`
+                        `${verdict.emoji} Thread: ${data.thread_id}\n\n` +
+                        `Verdict: ${verdict.label}\n` +
+                        `─────────────────\n` +
+                        `💬 Comments: ${data.count}\n` +
+                        `📊 Mean: ${(data.mean * 100).toFixed(1)}%\n` +
+                        `📈 P90: ${(data.p90 * 100).toFixed(1)}%\n` +
+                        `📉 P95: ${(data.p95 * 100).toFixed(1)}%\n` +
+                        `⚠️ Max: ${(data.max * 100).toFixed(1)}%`
                       );
                     }
                   } catch (err) {
@@ -716,9 +975,10 @@ export default function MainUI({
                   borderRadius: 10,
                   fontWeight: 700,
                   cursor: "pointer",
+                  border: "none",
                 }}
               >
-                Search
+                🔍 Search
               </button>
             </div>
           </div>
@@ -771,7 +1031,7 @@ export default function MainUI({
               </button>
 
               <h2 style={{ textAlign: "center", marginBottom: 12 }}>
-                Real-Time Chat Mode
+                💬 Real-Time Chat Mode
               </h2>
 
               <ChatUI
@@ -786,7 +1046,7 @@ export default function MainUI({
       </main>
 
       {/* ======================================================
-          CHART MODAL
+          CHART MODAL - Full Analysis View
       ====================================================== */}
       <ChartModal
         open={showChart}
@@ -797,6 +1057,83 @@ export default function MainUI({
         title="Toxicity Score Distribution"
         modelName={modelName}
       >
+        {/* Summary Stats at top */}
+        {summary && (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+            gap: 12,
+            marginBottom: 20,
+          }}>
+            <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>Mean</div>
+              <div style={{ color: getToxicityVerdict(summary.mean).color, fontSize: 20, fontWeight: 800 }}>
+                {(summary.mean * 100).toFixed(1)}%
+              </div>
+            </div>
+            <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>P90</div>
+              <div style={{ color: "#f59e0b", fontSize: 20, fontWeight: 800 }}>
+                {(summary.p90 * 100).toFixed(1)}%
+              </div>
+            </div>
+            <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>P95</div>
+              <div style={{ color: "#ef4444", fontSize: 20, fontWeight: 800 }}>
+                {(summary.p95 * 100).toFixed(1)}%
+              </div>
+            </div>
+            <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>Max</div>
+              <div style={{ color: "#dc2626", fontSize: 20, fontWeight: 800 }}>
+                {(summary.max * 100).toFixed(1)}%
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Message/Thread counts */}
+        {(messageCount || threadCount) && (
+          <div style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: 16,
+            marginBottom: 16,
+            flexWrap: "wrap"
+          }}>
+            {messageCount && (
+              <div style={{ 
+                background: "#1f2937", 
+                padding: "8px 16px", 
+                borderRadius: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 8
+              }}>
+                <span>💬</span>
+                <span style={{ color: "#d1d5db" }}>
+                  <strong style={{ color: "white" }}>{messageCount}</strong> messages analyzed
+                </span>
+              </div>
+            )}
+            {threadCount > 1 && (
+              <div style={{ 
+                background: "#1f2937", 
+                padding: "8px 16px", 
+                borderRadius: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 8
+              }}>
+                <span>🧵</span>
+                <span style={{ color: "#d1d5db" }}>
+                  <strong style={{ color: "white" }}>{threadCount}</strong> threads
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         <Histogram
           data={histogram}
           threshold={0.2}
@@ -811,8 +1148,7 @@ export default function MainUI({
               marginTop: 6,
             }}
           >
-            {binDetail.from?.toFixed(3)} – {binDetail.to?.toFixed(3)} • Count:{" "}
-            {binDetail.count}
+            Range: {(binDetail.from * 100).toFixed(0)}% – {(binDetail.to * 100).toFixed(0)}% • Count: {binDetail.count}
           </div>
         )}
 
@@ -826,8 +1162,8 @@ export default function MainUI({
               paddingRight: 10,
             }}
           >
-            <h3 style={{ color: "white", marginBottom: 10, fontWeight: 800 }}>
-              Most Toxic Comments
+            <h3 style={{ color: "white", marginBottom: 10, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
+              🚨 Most Toxic Comments
             </h3>
 
             {topFlagged.map((item, idx) => (
@@ -840,16 +1176,21 @@ export default function MainUI({
                   marginBottom: 10,
                   boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
                   color: "white",
+                  borderLeft: `4px solid ${getToxicityVerdict(item.score).color}`,
                 }}
               >
                 <div
                   style={{
-                    color: "#f87171",
+                    color: getToxicityVerdict(item.score).color,
                     fontWeight: 700,
                     marginBottom: 6,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
                   }}
                 >
-                  Score: {item.score?.toFixed(3)}
+                  <span>{getToxicityVerdict(item.score).emoji}</span>
+                  <span>Score: {(item.score * 100).toFixed(1)}%</span>
                 </div>
                 <div
                   style={{
