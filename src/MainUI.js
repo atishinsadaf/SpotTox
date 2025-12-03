@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Histogram, ChartModal } from "./Chart";
 import ChatUI from "./ChatUI";
+import { downloadCsv } from "./utils/downloadCsv";
 
 export default function MainUI({
   now,
@@ -75,6 +76,10 @@ export default function MainUI({
   // Quick check loading state
   const [quickLoading, setQuickLoading] = useState(false);
 
+  // Toxicity threshold slider
+  const [threshold, setThreshold] = useState(0.7); // default = 70%
+  const [thresholdPreset, setThresholdPreset] = useState("balanced");
+
   const btn = (color) => ({
     padding: "12px 20px",
     background:
@@ -124,6 +129,11 @@ export default function MainUI({
     margin: "0 auto",
     boxShadow: "inset 0 0 6px rgba(0,0,0,0.6)",
   };
+
+  // Filter flagged comments based on current threshold
+  const filteredFlagged = (topFlagged || []).filter(
+    (item) => typeof item.score === "number" && item.score >= threshold
+  );
 
   // Helper function to get toxicity verdict
   const getToxicityVerdict = (score) => {
@@ -1136,7 +1146,7 @@ export default function MainUI({
 
         <Histogram
           data={histogram}
-          threshold={0.2}
+          threshold={threshold}
           onBinClick={(info) => setBinDetail(info)}
         />
 
@@ -1152,8 +1162,103 @@ export default function MainUI({
           </div>
         )}
 
+        {/* Threshold & preset controls */}
+        <div
+          style={{
+            marginTop: 16,
+            padding: "10px 14px",
+            background: "#111827",
+            borderRadius: 12,
+            border: "1px solid #1f2937",
+            color: "#d1d5db",
+            textAlign: "left",
+          }}
+        >
+          <div style={{ marginBottom: 6, fontWeight: 600, fontSize: 14 }}>
+            Toxicity threshold: {(threshold * 100).toFixed(0)}%
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={threshold}
+            onChange={(e) => {
+              setThreshold(parseFloat(e.target.value));
+              setThresholdPreset("");
+            }}
+            style={{ width: "100%" }}
+          />
+          <div
+            style={{
+              marginTop: 8,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setThreshold(0.9);
+                setThresholdPreset("relaxed");
+              }}
+              style={{
+                padding: "4px 10px",
+                fontSize: 12,
+                borderRadius: 999,
+                border: "1px solid #374151",
+                background:
+                  thresholdPreset === "relaxed" ? "#1d4ed8" : "#111827",
+                color: "white",
+                cursor: "pointer",
+              }}
+            >
+              Relaxed (90%)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setThreshold(0.7);
+                setThresholdPreset("balanced");
+              }}
+              style={{
+                padding: "4px 10px",
+                fontSize: 12,
+                borderRadius: 999,
+                border: "1px solid #374151",
+                background:
+                  thresholdPreset === "balanced" ? "#1d4ed8" : "#111827",
+                color: "white",
+                cursor: "pointer",
+              }}
+            >
+              Balanced (70%)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setThreshold(0.5);
+                setThresholdPreset("strict");
+              }}
+              style={{
+                padding: "4px 10px",
+                fontSize: 12,
+                borderRadius: 999,
+                border: "1px solid #374151",
+                background:
+                  thresholdPreset === "strict" ? "#1d4ed8" : "#111827",
+                color: "white",
+                cursor: "pointer",
+              }}
+            >
+              Strict (50%)
+            </button>
+          </div>
+        </div>
+
         {/* ===================== SCROLLABLE FLAGGED COMMENTS ===================== */}
-        {topFlagged && topFlagged.length > 0 && (
+        {filteredFlagged && filteredFlagged.length > 0 && (
           <div
             style={{
               marginTop: 20,
@@ -1163,10 +1268,55 @@ export default function MainUI({
             }}
           >
             <h3 style={{ color: "white", marginBottom: 10, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
-              🚨 Most Toxic Comments
+              🚨 Most Toxic Comments{" "}
+              <span
+                style={{
+                  fontWeight: 400,
+                  fontSize: 12,
+                  marginLeft: 6,
+                  color: "#9ca3af",
+                }}
+              >
+                (≥ {(threshold * 100).toFixed(0)}%)
+              </span>
             </h3>
 
-            {topFlagged.map((item, idx) => (
+            <div
+              style={{
+                marginBottom: 10,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  downloadCsv(
+                    filteredFlagged.map((item, idx) => ({
+                      index: idx + 1,
+                      text: item.text,
+                      score: item.score,
+                      score_percent: (item.score * 100).toFixed(1),
+                    })),
+                    "spottox_flagged_comments.csv"
+                  )
+                }
+                style={{
+                  padding: "6px 10px",
+                  fontSize: 12,
+                  borderRadius: 999,
+                  border: "1px solid #4b5563",
+                  background: "#111827",
+                  color: "white",
+                  cursor: "pointer",
+                }}
+              >
+                💾 Export visible flagged as CSV
+              </button>
+            </div>
+
+            {filteredFlagged.map((item, idx) => (
               <div
                 key={idx}
                 style={{
