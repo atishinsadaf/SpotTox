@@ -2,7 +2,7 @@
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import os, json, re
+import os, json
 from datetime import datetime
 import torch
 import torch.nn as nn
@@ -10,15 +10,6 @@ import numpy as np
 import pandas as pd
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModel
 import random
-
-# OCR imports for image processing
-try:
-    import pytesseract
-    from PIL import Image
-    OCR_AVAILABLE = True
-except ImportError:
-    OCR_AVAILABLE = False
-    print("⚠️ pytesseract or Pillow not installed. Image upload will be limited.")
 
 DEMO_MODE = False
 
@@ -32,7 +23,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ---------------------------------------------------------------------
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-ALLOWED_EXTENSIONS = {"txt", "json", "csv", "png", "jpg", "jpeg", "gif", "webp"}
+ALLOWED_EXTENSIONS = {"txt", "json", "csv"}
 
 MODEL_PATHS = {
     "SpotToxBERT": os.path.join(BASE_DIR, "models/SpotToxBERT"),
@@ -155,30 +146,6 @@ def score_texts(tok, mdl, texts, max_length=256, batch_size=32):
 
 
 # ---------------------------------------------------------------------
-# Demo mode helper - generates fake scores
-# ---------------------------------------------------------------------
-def demo_score_texts(texts):
-    """Generate random toxicity scores for demo mode"""
-    results = []
-    for text in texts:
-        # Generate slightly realistic scores based on text length and some keywords
-        base_score = random.uniform(0.05, 0.35)
-        
-        # Check for potentially toxic keywords ( basic simulation)
-        toxic_words = ['stupid', 'hate', 'awful', 'terrible', 'idiot', 'dumb', 'worst', 'suck', 'bad']
-        text_lower = text.lower()
-        for word in toxic_words:
-            if word in text_lower:
-                base_score += random.uniform(0.15, 0.3)
-        
-        # Cap at 1.0
-        score = min(base_score, 0.98)
-        results.append(score)
-    
-    return results
-
-
-# ---------------------------------------------------------------------
 # Init
 # ---------------------------------------------------------------------
 app = Flask(__name__)
@@ -186,7 +153,7 @@ CORS(app)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 if DEMO_MODE:
-    print("🎮 Running in DEMO MODE - using simulated toxicity scores")
+    print("Running in DEMO MODE")
 else:
     load_model(current_model_name)
 
@@ -196,7 +163,7 @@ else:
 # ---------------------------------------------------------------------
 @app.get("/")
 def home():
-    return {"message": "SpotTox backend", "active_model": current_model_name, "demo_mode": DEMO_MODE}
+    return {"message": "SpotTox backend", "active_model": current_model_name}
 
 
 @app.get("/models")
@@ -267,7 +234,7 @@ def analyze_file():
     texts = df[text_col].fillna("").astype(str).tolist()
 
     if DEMO_MODE:
-        scores = np.array(demo_score_texts(texts))
+        scores = np.array([random.uniform(0, 1) for _ in texts])
     else:
         if model_override and model_override != current_model_name:
             load_model(model_override)
@@ -326,7 +293,7 @@ def analyze_multiple():
         texts = df[text_col].fillna("").astype(str).tolist()
 
         if DEMO_MODE:
-            scores = np.array(demo_score_texts(texts))
+            scores = np.array([random.uniform(0, 1) for _ in texts])
             results.append({
                 "file": f,
                 "mean": float(scores.mean()),
@@ -366,12 +333,6 @@ def analyze_chat():
 
     if not text.strip():
         return {"error": "empty text"}, 400
-
-    # Handle DEMO_MODE properly
-    if DEMO_MODE:
-        scores = demo_score_texts([text])
-        score = float(scores[0])
-        return {"model": current_model_name, "score": score}
 
     if model_override and model_override != current_model_name:
         load_model(model_override)
@@ -446,15 +407,12 @@ def search_thread():
 
     texts = rows[text_col].fillna("").astype(str).tolist()
 
-    # Handle DEMO_MODE
-    if DEMO_MODE:
-        toxicity = np.array(demo_score_texts(texts))
+    scores = score_texts(current_tok, current_mdl, texts)
+
+    if isinstance(scores[0], dict):
+        toxicity = np.array([s["toxicity"] for s in scores])
     else:
-        scores = score_texts(current_tok, current_mdl, texts)
-        if isinstance(scores[0], dict):
-            toxicity = np.array([s["toxicity"] for s in scores])
-        else:
-            toxicity = np.array(scores)
+        toxicity = np.array(scores)
 
     return jsonify({
         "found": True,
@@ -466,6 +424,67 @@ def search_thread():
         "max": float(toxicity.max()),
     })
 
+# helper for Reddit collapsed comments extraction
+def extract_all_comments(children, more_ids):
+    comments = []
+
+    for item in children:
+        kind = item.get("kind")
+        data = item.get("data", {}) or {}
+
+        if kind == "t1":  # regular comment
+            body = data.get("body", "")
+            if body.strip():
+                comments.append(body)
+
+            # recurse into replies
+            replies = data.get("replies")
+            if isinstance(replies, dict):
+                reply_children = replies.get("data", {}).get("children", [])
+                comments.extend(extract_all_comments(reply_children, more_ids))
+
+        elif kind == "more":
+            # gather missing comment IDs
+            ids = data.get("children", [])
+            more_ids.extend(ids)
+
+    return comments
+
+
+def fetch_more_comments(thread_id, more_ids):
+    if not more_ids:
+        return []
+
+    url = "https://www.reddit.com/api/morechildren"
+    params = {
+        "api_type": "json",
+        "link_id": f"t3_{thread_id}",
+        "children": ",".join(more_ids)
+    }
+    headers = {"User-agent": "SpotToxBot/1.0"}
+
+    r = requests.get(url, params=params, headers=headers)
+
+    try:
+        data = r.json()
+    except Exception:
+        return []
+
+    bodies = []
+
+    try:
+        things = data["json"]["data"]["things"]
+        for t in things:
+            if t.get("kind") == "t1":
+                body = t["data"].get("body", "")
+                if body.strip():
+                    bodies.append(body)
+    except:
+        pass
+
+    return bodies
+
+
 @app.post("/analyze_reddit")
 def analyze_reddit():
     data = request.get_json()
@@ -475,7 +494,7 @@ def analyze_reddit():
     if not url:
         return {"error": "No URL provided"}, 400
 
-    # Extract Reddit thread ID
+    # Extract thread ID
     try:
         parts = url.split("/comments/")
         thread_part = parts[1].split("/")[0]
@@ -485,7 +504,6 @@ def analyze_reddit():
 
     # Fetch Reddit JSON
     json_url = f"https://www.reddit.com/comments/{thread_id}.json"
-
     headers = {"User-agent": "SpotToxBot/1.0"}
     res = requests.get(json_url, headers=headers)
 
@@ -497,38 +515,34 @@ def analyze_reddit():
     except:
         return {"error": "Could not parse Reddit JSON"}, 400
 
-    # Extract all comments
-    comments = []
+    # Extract comments and missing "more" IDs
     try:
         listing = data[1]["data"]["children"]
-        for c in listing:
-            if c["kind"] == "t1":  # normal comment
-                txt = c["data"].get("body", "")
-                if txt.strip():
-                    comments.append(txt)
-    except:
-        return {"error": "Failed extracting comments"}, 400
+        more_ids = []
+        comments = extract_all_comments(listing, more_ids)
+    except Exception as e:
+        return {"error": f"Failed extracting comments: {e}"}, 400
+
+    # Fetch missing comments from "more"
+    extra_comments = fetch_more_comments(thread_id, more_ids)
+    comments.extend(extra_comments)
 
     if not comments:
         return {"error": "No comments found in thread"}, 400
 
-    # Handle DEMO_MODE
-    if DEMO_MODE:
-        toxicity = np.array(demo_score_texts(comments))
+    # Switch model if needed
+    if model_override != current_model_name:
+        load_model(model_override)
+
+    # Score all comments
+    scores = score_texts(current_tok, current_mdl, comments)
+
+    if isinstance(scores[0], dict):
+        toxicity = np.array([s["toxicity"] for s in scores])
     else:
-        # Switch model if needed
-        if model_override != current_model_name:
-            load_model(model_override)
+        toxicity = np.array(scores)
 
-        # Score them
-        scores = score_texts(current_tok, current_mdl, comments)
-
-        # Handle LSTM dict output
-        if isinstance(scores[0], dict):
-            toxicity = np.array([s["toxicity"] for s in scores])
-        else:
-            toxicity = np.array(scores)
-
+    # Build response
     return {
         "model": current_model_name,
         "count": len(toxicity),
@@ -543,166 +557,6 @@ def analyze_reddit():
         ]
     }
 
-
-# ---------------------------------------------------------------------
-# Image Upload & OCR Analysis
-# ---------------------------------------------------------------------
-def extract_text_from_image(image_path):
-    """Extract text from an image using OCR"""
-    if not OCR_AVAILABLE:
-        return None, "OCR not available. Install pytesseract and Pillow."
-    
-    try:
-        img = Image.open(image_path)
-        # Use pytesseract to extract text
-        text = pytesseract.image_to_string(img)
-        return text, None
-    except Exception as e:
-        return None, str(e)
-
-
-def parse_conversation_from_text(raw_text):
-    """Parse extracted text into individual messages"""
-    messages = []
-    
-    # Split by newlines and filter empty lines
-    lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
-    
-    # Try to identify message patterns
-    # Common patterns: "Username: message" or just separate lines
-    for line in lines:
-        # Skip very short lines (likely noise)
-        if len(line) < 3:
-            continue
-        
-        # Check for "username: message" pattern
-        if ':' in line:
-            parts = line.split(':', 1)
-            if len(parts) == 2 and len(parts[0]) < 30:  # Username likely < 30 chars
-                messages.append({
-                    "user": parts[0].strip(),
-                    "text": parts[1].strip()
-                })
-                continue
-        
-        # Otherwise treat whole line as a message
-        messages.append({
-            "user": "Unknown",
-            "text": line
-        })
-    
-    return messages
-
-
-@app.post("/upload-image")
-def upload_image():
-    """Handle image upload for OCR processing"""
-    if "file" not in request.files:
-        return {"error": "No file provided"}, 400
-    
-    f = request.files["file"]
-    if not f.filename:
-        return {"error": "No filename"}, 400
-    
-    # Check if it's an image
-    ext = f.filename.rsplit(".", 1)[-1].lower()
-    if ext not in {"png", "jpg", "jpeg", "gif", "webp"}:
-        return {"error": "Invalid image format. Use PNG, JPG, GIF, or WEBP."}, 400
-    
-    # Save the image
-    path = os.path.join(UPLOAD_FOLDER, f.filename)
-    f.save(path)
-    
-    return {"filename": f.filename, "type": "image"}
-
-
-@app.post("/analyze-image")
-def analyze_image():
-    """Extract text from image and analyze toxicity"""
-    data = request.get_json()
-    filename = data.get("filename")
-    model_override = data.get("model", current_model_name)
-    
-    if not filename:
-        return {"error": "No filename provided"}, 400
-    
-    path = os.path.join(UPLOAD_FOLDER, filename)
-    if not os.path.exists(path):
-        return {"error": "File not found"}, 400
-    
-    # Check if OCR is available
-    if not OCR_AVAILABLE:
-        return {
-            "error": "OCR not available. Please install pytesseract and Pillow.",
-            "install_instructions": "Run: brew install tesseract && pip install pytesseract Pillow"
-        }, 400
-    
-    # Extract text from image
-    raw_text, error = extract_text_from_image(path)
-    if error:
-        return {"error": f"OCR failed: {error}"}, 400
-    
-    if not raw_text or not raw_text.strip():
-        return {"error": "No text found in image"}, 400
-    
-    # Parse into messages
-    messages = parse_conversation_from_text(raw_text)
-    
-    if not messages:
-        return {"error": "Could not parse any messages from image"}, 400
-    
-    # Extract just the text for scoring
-    texts = [m["text"] for m in messages if m["text"]]
-    
-    if not texts:
-        return {"error": "No valid text to analyze"}, 400
-    
-    # Score the texts
-    if DEMO_MODE:
-        scores = demo_score_texts(texts)
-    else:
-        if model_override and model_override != current_model_name:
-            load_model(model_override)
-        scores = score_texts(current_tok, current_mdl, texts)
-        
-        # Handle LSTM dict output
-        if isinstance(scores[0], dict):
-            scores = [s["toxicity"] for s in scores]
-    
-    scores = np.array(scores)
-    
-    # Combine messages with scores
-    analyzed_messages = []
-    for i, msg in enumerate(messages):
-        if i < len(scores):
-            analyzed_messages.append({
-                "user": msg["user"],
-                "text": msg["text"],
-                "score": float(scores[i])
-            })
-    
-    # Sort by toxicity for top flagged
-    sorted_msgs = sorted(analyzed_messages, key=lambda x: x["score"], reverse=True)
-    
-    return {
-        "model": current_model_name,
-        "message_count": len(analyzed_messages),
-        "thread_count": 1,
-        "raw_text": raw_text[:500],  # First 500 chars for preview
-        "mean": float(scores.mean()),
-        "p90": float(np.quantile(scores, 0.9)),
-        "p95": float(np.quantile(scores, 0.95)),
-        "max": float(scores.max()),
-        "histogram": scores.tolist(),
-        "messages": analyzed_messages,
-        "top": sorted_msgs[:10]
-    }
-
-
 if __name__ == "__main__":
-    print("🚀 SpotTox backend live at http://localhost:5001")
-    if OCR_AVAILABLE:
-        print("✅ OCR is available for image processing")
-    else:
-        print("⚠️ OCR not available - install with: brew install tesseract && pip install pytesseract Pillow")
+    print("SpotTox backend live at http://localhost:5001")
     app.run(debug=True, host="0.0.0.0", port=5001)
