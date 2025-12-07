@@ -12,7 +12,7 @@ import numpy as np, math, shutil, warnings
 from pathlib import Path
 
 SAVE_DIR = Path("models/SpotToxRoBERTa")
-BASE_MODEL = "roberta-base"
+BASE_MODEL = "roberta-base" ## change to roberta-large with larger datasets
 SEED = 42
 
 DATA_FILES = [
@@ -31,7 +31,7 @@ def load_data():
         # normalize scores to 0-1
         df["labels"] = (df["labels"] - df["labels"].min()) / (df["labels"].max() - df["labels"].min())
         dfs.append(df[["txt", "labels"]])
-        print(f"Loaded {f} with {len(df)} rows")
+        print(f"✓ Loaded {f} with {len(df)} rows")
     full = pd.concat(dfs, ignore_index=True)
     print(f"Total rows: {len(full)}")
     return full.rename(columns={"txt": "text"})
@@ -48,7 +48,7 @@ def make_dataset(df):
     tokenizer = RobertaTokenizer.from_pretrained(BASE_MODEL)
 
     def tok(batch):
-        return tokenizer(batch["text"], truncation=True, padding="max_length", max_length=128)
+        return tokenizer(batch["text"], truncation=True, padding="max_length", max_length=256)
 
     d = d.map(tok, batched=True)
 
@@ -62,7 +62,7 @@ def make_args():
     try:
         return TrainingArguments(
             output_dir=str(SAVE_DIR),
-            num_train_epochs=3,
+            num_train_epochs=5, # updated from 3 to 5
             learning_rate=2e-5,
             per_device_train_batch_size=8,
             per_device_eval_batch_size=16,
@@ -74,10 +74,10 @@ def make_args():
             seed=SEED,
         )
     except TypeError:
-        warnings.warn("⚠️ Using legacy TrainingArguments fallback")
+        warnings.warn("Using legacy TrainingArguments fallback")
         return TrainingArguments(
             output_dir=str(SAVE_DIR),
-            num_train_epochs=3,
+            num_train_epochs=5,
             learning_rate=2e-5,
             per_device_train_batch_size=8,
             per_device_eval_batch_size=16,
@@ -124,5 +124,3 @@ def train_roberta():
 
 if __name__ == "__main__":
     train_roberta()
-
-
