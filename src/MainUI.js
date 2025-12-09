@@ -57,6 +57,7 @@ export default function MainUI({
   setTopFlagged
 }) {
 
+
   // Search Thread State
   const [showSearch, setShowSearch] = useState(false);
   const [searchThread, setSearchThread] = useState("");
@@ -122,6 +123,7 @@ export default function MainUI({
     boxShadow: "inset 0 0 6px rgba(0,0,0,0.6)",
   };
 
+  // Helper function to get toxicity verdict
   const getToxicityVerdict = (score) => {
     if (score < 0.3) return { label: "SAFE", color: "#22c55e", emoji: "✅" };
     if (score < 0.5) return { label: "LOW RISK", color: "#84cc16", emoji: "⚠️" };
@@ -144,6 +146,7 @@ export default function MainUI({
         padding: "20px 0",
       }}
     >
+      {/* Keyframes for spinner */}
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
@@ -152,21 +155,50 @@ export default function MainUI({
           background: linear-gradient(90deg, #ef4444, #f97316, #eab308);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
+          background-clip: text;
         }
-        .caret { animation: blink 1s step-end infinite; }
-        @keyframes blink { 50% { opacity: 0; } }
+        .caret {
+          animation: blink 1s step-end infinite;
+        }
+        @keyframes blink {
+          50% { opacity: 0; }
+        }
+        .pulse-btn {
+          animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+          50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
 
+        /* Responsive styles */
         @media (max-width: 600px) {
-          main { padding: 20px !important; margin: 10px !important; }
+          main {
+            padding: 20px !important;
+            margin: 10px !important;
+          }
         }
 
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1f2937; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+          width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+          background: #1f2937;
+          border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #4b5563;
+          border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: #6b7280;
+        }
       `}</style>
 
-      {/* RIGHT-SIDE BUTTONS (Recent only — Chat removed) */}
+      {/* ------------------------------------------------------
+         RECENT UPLOADS
+      ------------------------------------------------------ */}
       <div
         style={{
           position: "fixed",
@@ -250,7 +282,9 @@ export default function MainUI({
         )}
       </div>
 
-      {/* MAIN PANEL */}
+      {/* ------------------------------------------------------
+          MAIN PANEL
+      ------------------------------------------------------ */}
       <main
         style={{
           padding: "30px 40px",
@@ -317,7 +351,9 @@ export default function MainUI({
           </select>
         </div>
 
-        {/* ========================== QUICK CHECK ========================== */}
+        {/* ============================================================
+             "IS IT TOXIC?" BUTTON
+        ============================================================ */}
         {file && !isAnalyzing && !quickLoading && (
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
             <button
@@ -353,6 +389,9 @@ export default function MainUI({
           </div>
         )}
 
+        {/* ============================================================
+            QUICK RESULT DISPLAY - Shows simple YES/NO answer
+        ============================================================ */}
         {quickResult && !showChart && (
           <div
             style={{
@@ -377,10 +416,7 @@ export default function MainUI({
               {getToxicityVerdict(quickResult.mean).label}
             </div>
             <div style={{ color: "#9ca3af", fontSize: 14, marginBottom: 12 }}>
-              Average Toxicity Score:{" "}
-              <strong style={{ color: "white" }}>
-                {(quickResult.mean * 100).toFixed(1)}%
-              </strong>
+              Average Toxicity Score: <strong style={{ color: "white" }}>{(quickResult.mean * 100).toFixed(1)}%</strong>
             </div>
 
             {/* Message and Thread counts */}
@@ -401,13 +437,9 @@ export default function MainUI({
               }}>
                 <span>💬</span>
                 <span style={{ color: "#d1d5db" }}>
-                  <strong style={{ color: "white" }}>
-                    {quickResult.messageCount || 0}
-                  </strong>{" "}
-                  messages
+                  <strong style={{ color: "white" }}>{quickResult.messageCount || 0}</strong> messages
                 </span>
               </div>
-
               {quickResult.threadCount > 1 && (
                 <div style={{
                   background: "#1f2937",
@@ -419,10 +451,7 @@ export default function MainUI({
                 }}>
                   <span>🧵</span>
                   <span style={{ color: "#d1d5db" }}>
-                    <strong style={{ color: "white" }}>
-                      {quickResult.threadCount}
-                    </strong>{" "}
-                    threads
+                    <strong style={{ color: "white" }}>{quickResult.threadCount}</strong> threads
                   </span>
                 </div>
               )}
@@ -467,7 +496,7 @@ export default function MainUI({
             marginBottom: 10,
           }}
         >
-          {/* Upload Thread */}
+          {/* Upload Thread (Single) */}
           <label
             style={{
               ...btn("red"),
@@ -493,7 +522,7 @@ export default function MainUI({
             />
           </label>
 
-          {/* Upload Image */}
+          {/* Upload Image/Screenshot */}
           <label
             style={{
               ...btn("orange"),
@@ -520,17 +549,15 @@ export default function MainUI({
           </label>
 
           {/* Upload Multiple */}
-          <label
-            style={{
-              ...btn("blue"),
-              width: 240,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              paddingTop: 12,
-              paddingBottom: 12,
-            }}
-          >
+          <label style={{
+            ...btn("blue"),
+            width: 240,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            paddingTop: 12,
+            paddingBottom: 12,
+          }}>
             <span style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
               📚 Upload Multiple
             </span>
@@ -547,7 +574,7 @@ export default function MainUI({
           </label>
         </div>
 
-        {/* REDDIT BUTTON */}
+        {/* Reddit Button */}
         <button
           onClick={() => setShowReddit(true)}
           style={{
@@ -597,16 +624,41 @@ export default function MainUI({
           </button>
         )}
 
+        {multiFiles.length > 0 && (
+          <div style={{ marginTop: 12, color: "#fca5a5", textAlign: "left" }}>
+            <b>📂 Uploaded Threads ({multiFiles.length}):</b>
+            <ul style={{ margin: "8px 0", paddingLeft: 20 }}>
+              {multiFiles.map((f, i) => <li key={i} style={{ fontSize: 14 }}>{f}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {uploadedName && (
+          <div style={{
+            marginTop: 16,
+            padding: "12px 16px",
+            background: "#1f2937",
+            borderRadius: 8,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8
+          }}>
+            <span>📄</span>
+            <span style={{ color: "#fca5a5" }}>
+              Uploaded: <strong>{uploadedName}</strong>
+            </span>
+          </div>
+        )}
+
+        {file && !isAnalyzing && !quickResult && (
+          <button style={{ ...analyzeBtn, width: 240, margin: "16px auto 0", display: "block" }} onClick={handleAnalyze}>
+            📊 Full Analysis (Charts)
+          </button>
+        )}
+
         {multiFiles.length >= 2 && !isAnalyzing && (
-          <button
-            style={{
-              ...analyzeBtn,
-              width: 280,
-              margin: "12px auto 0",
-              display: "block",
-            }}
-            onClick={analyzeMultipleThreads}
-          >
+          <button style={{ ...analyzeBtn, width: 280, margin: "12px auto 0", display: "block" }} onClick={analyzeMultipleThreads}>
             📊 Analyze {multiFiles.length} Threads
           </button>
         )}
@@ -630,7 +682,9 @@ export default function MainUI({
           </div>
         )}
 
-        {/* ======================= REDDIT MODAL ======================= */}
+        {/* ======================================================
+            REDDIT MODAL WITH PROGRESS BAR
+        ====================================================== */}
         {showReddit && (
           <div
             style={{
@@ -689,6 +743,7 @@ export default function MainUI({
                   background: "#111827",
                   color: "white",
                   marginBottom: 12,
+                  boxSizing: "border-box",
                 }}
               />
 
@@ -710,19 +765,19 @@ export default function MainUI({
                     }, 300);
 
                     try {
-                      const res = await fetch(
-                        "http://127.0.0.1:5001/analyze_reddit",
-                        {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            url: redditURL,
-                            model: selectedModel,
-                          }),
-                        }
-                      );
+                      const res = await fetch("http://127.0.0.1:5001/analyze_reddit", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                          url: redditURL,
+                          model: selectedModel,
+                        }),
+                      });
 
                       const data = await res.json();
+
                       clearInterval(interval);
 
                       if (!res.ok) {
@@ -793,7 +848,9 @@ export default function MainUI({
           </div>
         )}
 
-        {/* ======================= SEARCH THREAD MODAL ======================= */}
+        {/* ======================================================
+            THREAD SEARCH MODAL
+        ====================================================== */}
         {showSearch && (
           <div
             style={{
@@ -851,6 +908,7 @@ export default function MainUI({
                   background: "#111827",
                   color: "white",
                   marginBottom: 12,
+                  boxSizing: "border-box",
                 }}
               />
 
@@ -862,14 +920,13 @@ export default function MainUI({
                   }
 
                   try {
-                    const res = await fetch(
-                      "http://127.0.0.1:5001/search_thread",
-                      {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ thread_id: searchThread }),
-                      }
-                    );
+                    const res = await fetch("http://127.0.0.1:5001/search_thread", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({ thread_id: searchThread }),
+                    });
 
                     const data = await res.json();
 
@@ -908,9 +965,12 @@ export default function MainUI({
             </div>
           </div>
         )}
+
       </main>
 
-      {/* ======================= CHART MODAL ======================= */}
+      {/* ======================================================
+          CHART MODAL - Full Analysis View
+      ====================================================== */}
       <ChartModal
         open={showChart}
         onClose={() => {
@@ -920,71 +980,35 @@ export default function MainUI({
         title="Toxicity Score Distribution"
         modelName={modelName}
       >
+        {/* Summary Stats at top */}
         {summary && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
-              gap: 12,
-              marginBottom: 20,
-            }}
-          >
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+            gap: 12,
+            marginBottom: 20,
+          }}>
             <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>
-                Mean
-              </div>
-              <div
-                style={{
-                  color: getToxicityVerdict(summary.mean).color,
-                  fontSize: 20,
-                  fontWeight: 800,
-                }}
-              >
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>Mean</div>
+              <div style={{ color: getToxicityVerdict(summary.mean).color, fontSize: 20, fontWeight: 800 }}>
                 {(summary.mean * 100).toFixed(1)}%
               </div>
             </div>
-
             <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>
-                P90
-              </div>
-              <div
-                style={{
-                  color: "#f59e0b",
-                  fontSize: 20,
-                  fontWeight: 800,
-                }}
-              >
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>P90</div>
+              <div style={{ color: "#f59e0b", fontSize: 20, fontWeight: 800 }}>
                 {(summary.p90 * 100).toFixed(1)}%
               </div>
             </div>
-
             <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>
-                P95
-              </div>
-              <div
-                style={{
-                  color: "#ef4444",
-                  fontSize: 20,
-                  fontWeight: 800,
-                }}
-              >
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>P95</div>
+              <div style={{ color: "#ef4444", fontSize: 20, fontWeight: 800 }}>
                 {(summary.p95 * 100).toFixed(1)}%
               </div>
             </div>
-
             <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>
-                Max
-              </div>
-              <div
-                style={{
-                  color: "#dc2626",
-                  fontSize: 20,
-                  fontWeight: 800,
-                }}
-              >
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>Max</div>
+              <div style={{ color: "#dc2626", fontSize: 20, fontWeight: 800 }}>
                 {(summary.max * 100).toFixed(1)}%
               </div>
             </div>
@@ -993,49 +1017,40 @@ export default function MainUI({
 
         {/* Message/Thread counts */}
         {(messageCount || threadCount) && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              gap: 16,
-              marginBottom: 16,
-              flexWrap: "wrap",
-            }}
-          >
+          <div style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: 16,
+            marginBottom: 16,
+            flexWrap: "wrap"
+          }}>
             {messageCount && (
-              <div
-                style={{
-                  background: "#1f2937",
-                  padding: "8px 16px",
-                  borderRadius: 8,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
+              <div style={{
+                background: "#1f2937",
+                padding: "8px 16px",
+                borderRadius: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 8
+              }}>
                 <span>💬</span>
                 <span style={{ color: "#d1d5db" }}>
-                  <strong style={{ color: "white" }}>{messageCount}</strong>{" "}
-                  messages analyzed
+                  <strong style={{ color: "white" }}>{messageCount}</strong> messages analyzed
                 </span>
               </div>
             )}
-
             {threadCount > 1 && (
-              <div
-                style={{
-                  background: "#1f2937",
-                  padding: "8px 16px",
-                  borderRadius: 8,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
+              <div style={{
+                background: "#1f2937",
+                padding: "8px 16px",
+                borderRadius: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 8
+              }}>
                 <span>🧵</span>
                 <span style={{ color: "#d1d5db" }}>
-                  <strong style={{ color: "white" }}>{threadCount}</strong>{" "}
-                  threads
+                  <strong style={{ color: "white" }}>{threadCount}</strong> threads
                 </span>
               </div>
             )}
@@ -1056,12 +1071,11 @@ export default function MainUI({
               marginTop: 6,
             }}
           >
-            Range: {(binDetail.from * 100).toFixed(0)}% –{" "}
-            {(binDetail.to * 100).toFixed(0)}% • Count: {binDetail.count}
+            Range: {(binDetail.from * 100).toFixed(0)}% – {(binDetail.to * 100).toFixed(0)}% • Count: {binDetail.count}
           </div>
         )}
 
-        {/* Flagged Comments */}
+        {/* ===================== SCROLLABLE FLAGGED COMMENTS ===================== */}
         {topFlagged && topFlagged.length > 0 && (
           <div
             style={{
@@ -1071,16 +1085,7 @@ export default function MainUI({
               paddingRight: 10,
             }}
           >
-            <h3
-              style={{
-                color: "white",
-                marginBottom: 10,
-                fontWeight: 800,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
+            <h3 style={{ color: "white", marginBottom: 10, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
               🚨 Most Toxic Comments
             </h3>
 
