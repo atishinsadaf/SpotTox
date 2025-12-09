@@ -10,6 +10,9 @@ import numpy as np
 import pandas as pd
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModel
 import random
+from threading import Lock
+model_lock = Lock()
+
 
 # OCR imports for image processing
 try:
@@ -86,31 +89,32 @@ def allowed_file(filename):
 def load_model(name):
     global current_model_name, current_tok, current_mdl
 
-    if name not in MODEL_PATHS:
-        raise ValueError(f"Unknown model: {name}")
+    with model_lock:  # Prevent overlapping loads
+        if name not in MODEL_PATHS:
+            raise ValueError(f"Unknown model: {name}")
 
-    model_dir = MODEL_PATHS[name]
-    if not os.path.isdir(model_dir):
-        raise ValueError(f"Model directory not found: {model_dir}")
+        print(f"Switching to model: {name}")
+        model_dir = MODEL_PATHS[name]
 
-    print(f"Switching to model: {name}")
+        if name == "SpotToxLSTM":
+            tok = AutoTokenizer.from_pretrained(model_dir)
+            mdl = SpotToxLSTM()
+            state = torch.load(os.path.join(model_dir, "SpotToxLSTM.pt"), map_location="cpu")
+            mdl.load_state_dict(state)
+            mdl.to(device)
+            mdl.eval()
+        else:
+            tok = AutoTokenizer.from_pretrained(model_dir)
+            mdl = AutoModelForSequenceClassification.from_pretrained(model_dir)
+            mdl.to(device)
+            mdl.eval()
 
-    if name == "SpotToxLSTM":
-        tok = AutoTokenizer.from_pretrained(model_dir)
-        mdl = SpotToxLSTM()
-        mdl.load_state_dict(torch.load(os.path.join(model_dir, "SpotToxLSTM.pt"), map_location=device))
-        mdl.to(device)
-        mdl.eval()
-    else:
-        tok = AutoTokenizer.from_pretrained(model_dir)
-        mdl = AutoModelForSequenceClassification.from_pretrained(model_dir)
-        mdl.to(device)
-        mdl.eval()
+        current_model_name = name
+        current_tok = tok
+        current_mdl = mdl
 
-    current_model_name = name
-    current_tok = tok
-    current_mdl = mdl
-    print(f"Model loaded: {name}")
+        print(f"Model loaded: {name}")
+
 
 
 def score_texts(tok, mdl, texts, max_length=256, batch_size=32):
@@ -766,9 +770,9 @@ def analyze_image():
 
 
 if __name__ == "__main__":
-    print("🚀 SpotTox backend live at http://localhost:5001")
+    print("SpotTox backend live at http://localhost:5001")
     if OCR_AVAILABLE:
-        print("✅ OCR is available for image processing")
+        print("OCR is available for image processing")
     else:
-        print("⚠️ OCR not available - install with: brew install tesseract && pip install pytesseract Pillow")
+        print("OCR not available - install with: brew install tesseract && pip install pytesseract Pillow")
     app.run(debug=True, host="0.0.0.0", port=5001)
