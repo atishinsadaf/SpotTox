@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { Histogram, ChartModal } from "./Chart";
-import ChatUI from "./ChatUI";
 import { downloadCsv } from "./utils/downloadCsv";
 
 export default function MainUI({
@@ -76,9 +75,8 @@ export default function MainUI({
   // Quick check loading state
   const [quickLoading, setQuickLoading] = useState(false);
 
-  // Toxicity threshold slider
-  const [threshold, setThreshold] = useState(0.7); // default = 70%
-  const [thresholdPreset, setThresholdPreset] = useState("balanced");
+  //About me button
+     const [showAbout, setShowAbout] = useState(false);
 
   const btn = (color) => ({
     padding: "12px 20px",
@@ -130,10 +128,6 @@ export default function MainUI({
     boxShadow: "inset 0 0 6px rgba(0,0,0,0.6)",
   };
 
-  // Filter flagged comments based on current threshold
-  const filteredFlagged = (topFlagged || []).filter(
-    (item) => typeof item.score === "number" && item.score >= threshold
-  );
 
   // Helper function to get toxicity verdict
   const getToxicityVerdict = (score) => {
@@ -209,7 +203,7 @@ export default function MainUI({
       `}</style>
 
       {/* ------------------------------------------------------
-          TOP RIGHT: CHAT MODE + RECENT UPLOADS
+          TOP RIGHT: RECENT UPLOADS | About Me
       ------------------------------------------------------ */}
       <div
         style={{
@@ -222,12 +216,12 @@ export default function MainUI({
           gap: 10,
         }}
       >
-
+        {/* ABOUT BUTTON */}
         <button
-          onClick={() => setShowChat(true)}
+          onClick={() => setShowAbout(!showAbout)}
           style={{
             padding: "10px 14px",
-            background: "linear-gradient(90deg,#10b981,#22c55e)",
+            background: "#1f2937",
             color: "white",
             border: "none",
             borderRadius: 12,
@@ -236,7 +230,7 @@ export default function MainUI({
             boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
           }}
         >
-          💬 Chat Mode
+          ℹ️ About
         </button>
 
         <button
@@ -310,6 +304,125 @@ export default function MainUI({
         )}
       </div>
 
+      {/* ABOUT PANEL */}
+      {showAbout && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.6)",
+            zIndex: 9999,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "#111827",
+              color: "white",
+              padding: 20,
+              borderRadius: 12,
+              width: "90%",
+              maxWidth: 480,
+              maxHeight: "80vh",
+              overflowY: "auto",
+              boxShadow: "0 12px 30px rgba(0,0,0,0.8)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 10,
+              }}
+            >
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
+                About SpotTox
+              </h2>
+              <button
+                onClick={() => setShowAbout(false)}
+                style={{
+                  background: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  cursor: "pointer",
+                  fontWeight: 700,
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <p style={{ fontSize: 13, color: "#e5e7eb", marginBottom: 10 }}>
+              SpotTox is a research project that uses Artificial Intelligence
+              (AI) and Machine Learning (ML) to detect toxic and cyberbullying
+              content in online conversations from platforms like Reddit,
+              Instagram, and X (Twitter).
+            </p>
+
+            <div style={{ fontSize: 13, color: "#d1d5db", marginBottom: 10 }}>
+              <strong>How it works:</strong>
+              <ul style={{ marginTop: 4, paddingLeft: 18 }}>
+                <li>
+                  We fine-tune models such as DistilBERT, BERT, RoBERTa and
+                  LSTM-based models on labeled toxicity datasets.
+                </li>
+                <li>
+                  Each comment is converted into embeddings and scored for
+                  toxicity (from non-toxic to highly toxic).
+                </li>
+                <li>
+                  For multi-message threads, SpotTox also looks at how toxicity
+                  changes over the conversation.
+                </li>
+              </ul>
+            </div>
+
+            <div style={{ fontSize: 13, color: "#d1d5db", marginBottom: 10 }}>
+              <strong>How to use this app:</strong>
+              <ul style={{ marginTop: 4, paddingLeft: 18 }}>
+                <li>Select a model from the model dropdown.</li>
+                <li>
+                  Choose one of the options:
+                  <br />
+                  – <b>Upload Thread</b> (CSV/TXT/JSON) to analyze a single
+                  conversation.
+                  <br />
+                  – <b>Upload Image</b> to analyze a screenshot of messages.
+                  <br />
+                  – <b>Upload Multiple</b> to compare several threads.
+                  <br />
+                  – <b>Analyze Reddit Link</b> to fetch and analyze a Reddit
+                  thread directly.
+                </li>
+                <li>
+                  Run the analysis and review the charts, summary stats and
+                  highlighted toxic comments.
+                </li>
+              </ul>
+            </div>
+
+            <div style={{ fontSize: 14, color: "#9ca3af" }}>
+              <strong>📌Note:</strong> SpotTox is still actively being developed.
+                We are continuously improving:
+                <ul style={{ marginTop: 6, marginLeft: 16 }}>
+                <li>Detection accuracy</li>
+                <li>Model performance (GPU optimization)</li>
+                <li>Interactive UI features for better user experience</li>
+                <li>Extended support for more platforms and data formats</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ------------------------------------------------------
           MAIN PANEL
       ------------------------------------------------------ */}
@@ -329,7 +442,7 @@ export default function MainUI({
         }}
       >
         <h1 style={{ marginBottom: 12, fontWeight: 800, fontSize: 32 }}>
-          Welcome to <span className="gradient-text">SpotTox</span>
+           <span className="gradient-text">Welcome to SpotTox</span>
         </h1>
 
         <p
@@ -446,18 +559,18 @@ export default function MainUI({
             <div style={{ color: "#9ca3af", fontSize: 14, marginBottom: 12 }}>
               Average Toxicity Score: <strong style={{ color: "white" }}>{(quickResult.mean * 100).toFixed(1)}%</strong>
             </div>
-            
+
             {/* Message and Thread counts */}
-            <div style={{ 
-              display: "flex", 
-              justifyContent: "center", 
-              gap: 20, 
+            <div style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 20,
               marginBottom: 12,
               flexWrap: "wrap"
             }}>
-              <div style={{ 
-                background: "#1f2937", 
-                padding: "8px 16px", 
+              <div style={{
+                background: "#1f2937",
+                padding: "8px 16px",
                 borderRadius: 8,
                 display: "flex",
                 alignItems: "center",
@@ -469,9 +582,9 @@ export default function MainUI({
                 </span>
               </div>
               {quickResult.threadCount > 1 && (
-                <div style={{ 
-                  background: "#1f2937", 
-                  padding: "8px 16px", 
+                <div style={{
+                  background: "#1f2937",
+                  padding: "8px 16px",
                   borderRadius: 8,
                   display: "flex",
                   alignItems: "center",
@@ -577,9 +690,9 @@ export default function MainUI({
           </label>
 
           {/* Upload Multiple */}
-          <label style={{ 
-            ...btn("blue"), 
-            width: 240, 
+          <label style={{
+            ...btn("blue"),
+            width: 240,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -662,8 +775,8 @@ export default function MainUI({
         )}
 
         {uploadedName && (
-          <div style={{ 
-            marginTop: 16, 
+          <div style={{
+            marginTop: 16,
             padding: "12px 16px",
             background: "#1f2937",
             borderRadius: 8,
@@ -1039,16 +1152,6 @@ export default function MainUI({
               >
                 Close
               </button>
-
-              <h2 style={{ textAlign: "center", marginBottom: 12 }}>
-                💬 Real-Time Chat Mode
-              </h2>
-
-              <ChatUI
-                model={selectedModel}
-                models={models}
-                onModelChange={setSelectedModel}
-              />
             </div>
           </div>
         )}
@@ -1112,9 +1215,9 @@ export default function MainUI({
             flexWrap: "wrap"
           }}>
             {messageCount && (
-              <div style={{ 
-                background: "#1f2937", 
-                padding: "8px 16px", 
+              <div style={{
+                background: "#1f2937",
+                padding: "8px 16px",
                 borderRadius: 8,
                 display: "flex",
                 alignItems: "center",
@@ -1127,9 +1230,9 @@ export default function MainUI({
               </div>
             )}
             {threadCount > 1 && (
-              <div style={{ 
-                background: "#1f2937", 
-                padding: "8px 16px", 
+              <div style={{
+                background: "#1f2937",
+                padding: "8px 16px",
                 borderRadius: 8,
                 display: "flex",
                 alignItems: "center",
@@ -1146,7 +1249,6 @@ export default function MainUI({
 
         <Histogram
           data={histogram}
-          threshold={threshold}
           onBinClick={(info) => setBinDetail(info)}
         />
 
@@ -1162,103 +1264,8 @@ export default function MainUI({
           </div>
         )}
 
-        {/* Threshold & preset controls */}
-        <div
-          style={{
-            marginTop: 16,
-            padding: "10px 14px",
-            background: "#111827",
-            borderRadius: 12,
-            border: "1px solid #1f2937",
-            color: "#d1d5db",
-            textAlign: "left",
-          }}
-        >
-          <div style={{ marginBottom: 6, fontWeight: 600, fontSize: 14 }}>
-            Toxicity threshold: {(threshold * 100).toFixed(0)}%
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={threshold}
-            onChange={(e) => {
-              setThreshold(parseFloat(e.target.value));
-              setThresholdPreset("");
-            }}
-            style={{ width: "100%" }}
-          />
-          <div
-            style={{
-              marginTop: 8,
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                setThreshold(0.9);
-                setThresholdPreset("relaxed");
-              }}
-              style={{
-                padding: "4px 10px",
-                fontSize: 12,
-                borderRadius: 999,
-                border: "1px solid #374151",
-                background:
-                  thresholdPreset === "relaxed" ? "#1d4ed8" : "#111827",
-                color: "white",
-                cursor: "pointer",
-              }}
-            >
-              Relaxed (90%)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setThreshold(0.7);
-                setThresholdPreset("balanced");
-              }}
-              style={{
-                padding: "4px 10px",
-                fontSize: 12,
-                borderRadius: 999,
-                border: "1px solid #374151",
-                background:
-                  thresholdPreset === "balanced" ? "#1d4ed8" : "#111827",
-                color: "white",
-                cursor: "pointer",
-              }}
-            >
-              Balanced (70%)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setThreshold(0.5);
-                setThresholdPreset("strict");
-              }}
-              style={{
-                padding: "4px 10px",
-                fontSize: 12,
-                borderRadius: 999,
-                border: "1px solid #374151",
-                background:
-                  thresholdPreset === "strict" ? "#1d4ed8" : "#111827",
-                color: "white",
-                cursor: "pointer",
-              }}
-            >
-              Strict (50%)
-            </button>
-          </div>
-        </div>
-
         {/* ===================== SCROLLABLE FLAGGED COMMENTS ===================== */}
-        {filteredFlagged && filteredFlagged.length > 0 && (
+        {topFlagged && topFlagged.length > 0 && (
           <div
             style={{
               marginTop: 20,
@@ -1267,19 +1274,19 @@ export default function MainUI({
               paddingRight: 10,
             }}
           >
-            <h3 style={{ color: "white", marginBottom: 10, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
-              🚨 Most Toxic Comments{" "}
-              <span
-                style={{
-                  fontWeight: 400,
-                  fontSize: 12,
-                  marginLeft: 6,
-                  color: "#9ca3af",
-                }}
-              >
-                (≥ {(threshold * 100).toFixed(0)}%)
-              </span>
+            <h3
+              style={{
+                color: "white",
+                marginBottom: 10,
+                fontWeight: 800,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              🚨 Most Toxic Comments
             </h3>
+
 
             <div
               style={{
@@ -1293,7 +1300,7 @@ export default function MainUI({
                 type="button"
                 onClick={() =>
                   downloadCsv(
-                    filteredFlagged.map((item, idx) => ({
+                    topFlagged.map((item, idx) => ({
                       index: idx + 1,
                       text: item.text,
                       score: item.score,
@@ -1316,7 +1323,7 @@ export default function MainUI({
               </button>
             </div>
 
-            {filteredFlagged.map((item, idx) => (
+            {topFlagged.map((item, idx) => (
               <div
                 key={idx}
                 style={{
