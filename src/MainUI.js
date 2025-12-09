@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { Histogram, ChartModal } from "./Chart";
-import { downloadCsv } from "./utils/downloadCsv";
 
 export default function MainUI({
   now,
@@ -58,8 +57,6 @@ export default function MainUI({
   setTopFlagged
 }) {
 
-  const [showChat, setShowChat] = useState(false);
-
   // Search Thread State
   const [showSearch, setShowSearch] = useState(false);
   const [searchThread, setSearchThread] = useState("");
@@ -74,9 +71,6 @@ export default function MainUI({
 
   // Quick check loading state
   const [quickLoading, setQuickLoading] = useState(false);
-
-  //About me button
-     const [showAbout, setShowAbout] = useState(false);
 
   const btn = (color) => ({
     padding: "12px 20px",
@@ -128,8 +122,6 @@ export default function MainUI({
     boxShadow: "inset 0 0 6px rgba(0,0,0,0.6)",
   };
 
-
-  // Helper function to get toxicity verdict
   const getToxicityVerdict = (score) => {
     if (score < 0.3) return { label: "SAFE", color: "#22c55e", emoji: "✅" };
     if (score < 0.5) return { label: "LOW RISK", color: "#84cc16", emoji: "⚠️" };
@@ -152,7 +144,6 @@ export default function MainUI({
         padding: "20px 0",
       }}
     >
-      {/* Keyframes for spinner */}
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
@@ -161,50 +152,21 @@ export default function MainUI({
           background: linear-gradient(90deg, #ef4444, #f97316, #eab308);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
-          background-clip: text;
         }
-        .caret {
-          animation: blink 1s step-end infinite;
-        }
-        @keyframes blink {
-          50% { opacity: 0; }
-        }
-        .pulse-btn {
-          animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-          50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-        }
-        
-        /* Responsive styles */
+        .caret { animation: blink 1s step-end infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
         @media (max-width: 600px) {
-          main {
-            padding: 20px !important;
-            margin: 10px !important;
-          }
+          main { padding: 20px !important; margin: 10px !important; }
         }
-        
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-          width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-          background: #1f2937;
-          border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: #4b5563;
-          border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: #6b7280;
-        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
       `}</style>
 
-      {/* ------------------------------------------------------
-          TOP RIGHT: RECENT UPLOADS | About Me
-      ------------------------------------------------------ */}
+      {/* RIGHT-SIDE BUTTONS (Recent only — Chat removed) */}
       <div
         style={{
           position: "fixed",
@@ -216,22 +178,6 @@ export default function MainUI({
           gap: 10,
         }}
       >
-        {/* ABOUT BUTTON */}
-        <button
-          onClick={() => setShowAbout(!showAbout)}
-          style={{
-            padding: "10px 14px",
-            background: "#1f2937",
-            color: "white",
-            border: "none",
-            borderRadius: 12,
-            fontWeight: 700,
-            cursor: "pointer",
-            boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
-          }}
-        >
-          ℹ️ About
-        </button>
 
         <button
           onClick={() => setShowRecent(!showRecent)}
@@ -304,128 +250,7 @@ export default function MainUI({
         )}
       </div>
 
-      {/* ABOUT PANEL */}
-      {showAbout && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            background: "rgba(0,0,0,0.6)",
-            zIndex: 9999,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              background: "#111827",
-              color: "white",
-              padding: 20,
-              borderRadius: 12,
-              width: "90%",
-              maxWidth: 480,
-              maxHeight: "80vh",
-              overflowY: "auto",
-              boxShadow: "0 12px 30px rgba(0,0,0,0.8)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 10,
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
-                About SpotTox
-              </h2>
-              <button
-                onClick={() => setShowAbout(false)}
-                style={{
-                  background: "#ef4444",
-                  color: "white",
-                  border: "none",
-                  padding: "4px 10px",
-                  borderRadius: 999,
-                  cursor: "pointer",
-                  fontWeight: 700,
-                }}
-              >
-                Close
-              </button>
-            </div>
-
-            <p style={{ fontSize: 13, color: "#e5e7eb", marginBottom: 10 }}>
-              SpotTox is a research project that uses Artificial Intelligence
-              (AI) and Machine Learning (ML) to detect toxic and cyberbullying
-              content in online conversations from platforms like Reddit,
-              Instagram, and X (Twitter).
-            </p>
-
-            <div style={{ fontSize: 13, color: "#d1d5db", marginBottom: 10 }}>
-              <strong>How it works:</strong>
-              <ul style={{ marginTop: 4, paddingLeft: 18 }}>
-                <li>
-                  We fine-tune models such as DistilBERT, BERT, RoBERTa and
-                  LSTM-based models on labeled toxicity datasets.
-                </li>
-                <li>
-                  Each comment is converted into embeddings and scored for
-                  toxicity (from non-toxic to highly toxic).
-                </li>
-                <li>
-                  For multi-message threads, SpotTox also looks at how toxicity
-                  changes over the conversation.
-                </li>
-              </ul>
-            </div>
-
-            <div style={{ fontSize: 13, color: "#d1d5db", marginBottom: 10 }}>
-              <strong>How to use this app:</strong>
-              <ul style={{ marginTop: 4, paddingLeft: 18 }}>
-                <li>Select a model from the model dropdown.</li>
-                <li>
-                  Choose one of the options:
-                  <br />
-                  – <b>Upload Thread</b> (CSV/TXT/JSON) to analyze a single
-                  conversation.
-                  <br />
-                  – <b>Upload Image</b> to analyze a screenshot of messages.
-                  <br />
-                  – <b>Upload Multiple</b> to compare several threads.
-                  <br />
-                  – <b>Analyze Reddit Link</b> to fetch and analyze a Reddit
-                  thread directly.
-                </li>
-                <li>
-                  Run the analysis and review the charts, summary stats and
-                  highlighted toxic comments.
-                </li>
-              </ul>
-            </div>
-
-            <div style={{ fontSize: 14, color: "#9ca3af" }}>
-              <strong>📌Note:</strong> SpotTox is still actively being developed.
-                We are continuously improving:
-                <ul style={{ marginTop: 6, marginLeft: 16 }}>
-                <li>Detection accuracy</li>
-                <li>Model performance (GPU optimization)</li>
-                <li>Interactive UI features for better user experience</li>
-                <li>Extended support for more platforms and data formats</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------
-          MAIN PANEL
-      ------------------------------------------------------ */}
+      {/* MAIN PANEL */}
       <main
         style={{
           padding: "30px 40px",
@@ -442,7 +267,7 @@ export default function MainUI({
         }}
       >
         <h1 style={{ marginBottom: 12, fontWeight: 800, fontSize: 32 }}>
-           <span className="gradient-text">Welcome to SpotTox</span>
+          Welcome to <span className="gradient-text">SpotTox</span>
         </h1>
 
         <p
@@ -492,9 +317,7 @@ export default function MainUI({
           </select>
         </div>
 
-        {/* ============================================================
-             "IS IT TOXIC?" BUTTON
-        ============================================================ */}
+        {/* ========================== QUICK CHECK ========================== */}
         {file && !isAnalyzing && !quickLoading && (
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
             <button
@@ -530,9 +353,6 @@ export default function MainUI({
           </div>
         )}
 
-        {/* ============================================================
-            QUICK RESULT DISPLAY - Shows simple YES/NO answer
-        ============================================================ */}
         {quickResult && !showChart && (
           <div
             style={{
@@ -557,7 +377,10 @@ export default function MainUI({
               {getToxicityVerdict(quickResult.mean).label}
             </div>
             <div style={{ color: "#9ca3af", fontSize: 14, marginBottom: 12 }}>
-              Average Toxicity Score: <strong style={{ color: "white" }}>{(quickResult.mean * 100).toFixed(1)}%</strong>
+              Average Toxicity Score:{" "}
+              <strong style={{ color: "white" }}>
+                {(quickResult.mean * 100).toFixed(1)}%
+              </strong>
             </div>
 
             {/* Message and Thread counts */}
@@ -578,9 +401,13 @@ export default function MainUI({
               }}>
                 <span>💬</span>
                 <span style={{ color: "#d1d5db" }}>
-                  <strong style={{ color: "white" }}>{quickResult.messageCount || 0}</strong> messages
+                  <strong style={{ color: "white" }}>
+                    {quickResult.messageCount || 0}
+                  </strong>{" "}
+                  messages
                 </span>
               </div>
+
               {quickResult.threadCount > 1 && (
                 <div style={{
                   background: "#1f2937",
@@ -592,7 +419,10 @@ export default function MainUI({
                 }}>
                   <span>🧵</span>
                   <span style={{ color: "#d1d5db" }}>
-                    <strong style={{ color: "white" }}>{quickResult.threadCount}</strong> threads
+                    <strong style={{ color: "white" }}>
+                      {quickResult.threadCount}
+                    </strong>{" "}
+                    threads
                   </span>
                 </div>
               )}
@@ -637,7 +467,7 @@ export default function MainUI({
             marginBottom: 10,
           }}
         >
-          {/* Upload Thread (Single) */}
+          {/* Upload Thread */}
           <label
             style={{
               ...btn("red"),
@@ -663,7 +493,7 @@ export default function MainUI({
             />
           </label>
 
-          {/* Upload Image/Screenshot */}
+          {/* Upload Image */}
           <label
             style={{
               ...btn("orange"),
@@ -690,15 +520,17 @@ export default function MainUI({
           </label>
 
           {/* Upload Multiple */}
-          <label style={{
-            ...btn("blue"),
-            width: 240,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            paddingTop: 12,
-            paddingBottom: 12,
-          }}>
+          <label
+            style={{
+              ...btn("blue"),
+              width: 240,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              paddingTop: 12,
+              paddingBottom: 12,
+            }}
+          >
             <span style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
               📚 Upload Multiple
             </span>
@@ -715,7 +547,7 @@ export default function MainUI({
           </label>
         </div>
 
-        {/* Reddit Button */}
+        {/* REDDIT BUTTON */}
         <button
           onClick={() => setShowReddit(true)}
           style={{
@@ -765,41 +597,16 @@ export default function MainUI({
           </button>
         )}
 
-        {multiFiles.length > 0 && (
-          <div style={{ marginTop: 12, color: "#fca5a5", textAlign: "left" }}>
-            <b>📂 Uploaded Threads ({multiFiles.length}):</b>
-            <ul style={{ margin: "8px 0", paddingLeft: 20 }}>
-              {multiFiles.map((f, i) => <li key={i} style={{ fontSize: 14 }}>{f}</li>)}
-            </ul>
-          </div>
-        )}
-
-        {uploadedName && (
-          <div style={{
-            marginTop: 16,
-            padding: "12px 16px",
-            background: "#1f2937",
-            borderRadius: 8,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8
-          }}>
-            <span>📄</span>
-            <span style={{ color: "#fca5a5" }}>
-              Uploaded: <strong>{uploadedName}</strong>
-            </span>
-          </div>
-        )}
-
-        {file && !isAnalyzing && !quickResult && (
-          <button style={{ ...analyzeBtn, width: 240, margin: "16px auto 0", display: "block" }} onClick={handleAnalyze}>
-            📊 Full Analysis (Charts)
-          </button>
-        )}
-
         {multiFiles.length >= 2 && !isAnalyzing && (
-          <button style={{ ...analyzeBtn, width: 280, margin: "12px auto 0", display: "block" }} onClick={analyzeMultipleThreads}>
+          <button
+            style={{
+              ...analyzeBtn,
+              width: 280,
+              margin: "12px auto 0",
+              display: "block",
+            }}
+            onClick={analyzeMultipleThreads}
+          >
             📊 Analyze {multiFiles.length} Threads
           </button>
         )}
@@ -823,9 +630,7 @@ export default function MainUI({
           </div>
         )}
 
-        {/* ======================================================
-            REDDIT MODAL WITH PROGRESS BAR
-        ====================================================== */}
+        {/* ======================= REDDIT MODAL ======================= */}
         {showReddit && (
           <div
             style={{
@@ -884,7 +689,6 @@ export default function MainUI({
                   background: "#111827",
                   color: "white",
                   marginBottom: 12,
-                  boxSizing: "border-box",
                 }}
               />
 
@@ -906,19 +710,19 @@ export default function MainUI({
                     }, 300);
 
                     try {
-                      const res = await fetch("http://127.0.0.1:5001/analyze_reddit", {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                          url: redditURL,
-                          model: selectedModel,
-                        }),
-                      });
+                      const res = await fetch(
+                        "http://127.0.0.1:5001/analyze_reddit",
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            url: redditURL,
+                            model: selectedModel,
+                          }),
+                        }
+                      );
 
                       const data = await res.json();
-
                       clearInterval(interval);
 
                       if (!res.ok) {
@@ -989,9 +793,7 @@ export default function MainUI({
           </div>
         )}
 
-        {/* ======================================================
-            THREAD SEARCH MODAL
-        ====================================================== */}
+        {/* ======================= SEARCH THREAD MODAL ======================= */}
         {showSearch && (
           <div
             style={{
@@ -1049,7 +851,6 @@ export default function MainUI({
                   background: "#111827",
                   color: "white",
                   marginBottom: 12,
-                  boxSizing: "border-box",
                 }}
               />
 
@@ -1061,13 +862,14 @@ export default function MainUI({
                   }
 
                   try {
-                    const res = await fetch("http://127.0.0.1:5001/search_thread", {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify({ thread_id: searchThread }),
-                    });
+                    const res = await fetch(
+                      "http://127.0.0.1:5001/search_thread",
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ thread_id: searchThread }),
+                      }
+                    );
 
                     const data = await res.json();
 
@@ -1106,61 +908,9 @@ export default function MainUI({
             </div>
           </div>
         )}
-
-        {/* ======================================================
-            CHAT MODAL
-        ====================================================== */}
-        {showChat && (
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              width: "100vw",
-              height: "100vh",
-              background: "rgba(0,0,0,0.6)",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              zIndex: 99999,
-            }}
-          >
-            <div
-              style={{
-                background: "#1f2937",
-                padding: 20,
-                borderRadius: 12,
-                width: "90%",
-                maxWidth: 550,
-                maxHeight: "80vh",
-                overflowY: "auto",
-                boxShadow: "0 12px 30px rgba(0,0,0,0.8)",
-              }}
-            >
-              <button
-                onClick={() => setShowChat(false)}
-                style={{
-                  float: "right",
-                  background: "#ef4444",
-                  color: "white",
-                  border: "none",
-                  padding: "6px 12px",
-                  borderRadius: 8,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-
       </main>
 
-      {/* ======================================================
-          CHART MODAL - Full Analysis View
-      ====================================================== */}
+      {/* ======================= CHART MODAL ======================= */}
       <ChartModal
         open={showChart}
         onClose={() => {
@@ -1170,35 +920,71 @@ export default function MainUI({
         title="Toxicity Score Distribution"
         modelName={modelName}
       >
-        {/* Summary Stats at top */}
         {summary && (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
-            gap: 12,
-            marginBottom: 20,
-          }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+              gap: 12,
+              marginBottom: 20,
+            }}
+          >
             <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>Mean</div>
-              <div style={{ color: getToxicityVerdict(summary.mean).color, fontSize: 20, fontWeight: 800 }}>
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>
+                Mean
+              </div>
+              <div
+                style={{
+                  color: getToxicityVerdict(summary.mean).color,
+                  fontSize: 20,
+                  fontWeight: 800,
+                }}
+              >
                 {(summary.mean * 100).toFixed(1)}%
               </div>
             </div>
+
             <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>P90</div>
-              <div style={{ color: "#f59e0b", fontSize: 20, fontWeight: 800 }}>
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>
+                P90
+              </div>
+              <div
+                style={{
+                  color: "#f59e0b",
+                  fontSize: 20,
+                  fontWeight: 800,
+                }}
+              >
                 {(summary.p90 * 100).toFixed(1)}%
               </div>
             </div>
+
             <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>P95</div>
-              <div style={{ color: "#ef4444", fontSize: 20, fontWeight: 800 }}>
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>
+                P95
+              </div>
+              <div
+                style={{
+                  color: "#ef4444",
+                  fontSize: 20,
+                  fontWeight: 800,
+                }}
+              >
                 {(summary.p95 * 100).toFixed(1)}%
               </div>
             </div>
+
             <div style={{ background: "#1f2937", padding: 12, borderRadius: 8, textAlign: "center" }}>
-              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>Max</div>
-              <div style={{ color: "#dc2626", fontSize: 20, fontWeight: 800 }}>
+              <div style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>
+                Max
+              </div>
+              <div
+                style={{
+                  color: "#dc2626",
+                  fontSize: 20,
+                  fontWeight: 800,
+                }}
+              >
                 {(summary.max * 100).toFixed(1)}%
               </div>
             </div>
@@ -1207,40 +993,49 @@ export default function MainUI({
 
         {/* Message/Thread counts */}
         {(messageCount || threadCount) && (
-          <div style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: 16,
-            marginBottom: 16,
-            flexWrap: "wrap"
-          }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 16,
+              marginBottom: 16,
+              flexWrap: "wrap",
+            }}
+          >
             {messageCount && (
-              <div style={{
-                background: "#1f2937",
-                padding: "8px 16px",
-                borderRadius: 8,
-                display: "flex",
-                alignItems: "center",
-                gap: 8
-              }}>
+              <div
+                style={{
+                  background: "#1f2937",
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
                 <span>💬</span>
                 <span style={{ color: "#d1d5db" }}>
-                  <strong style={{ color: "white" }}>{messageCount}</strong> messages analyzed
+                  <strong style={{ color: "white" }}>{messageCount}</strong>{" "}
+                  messages analyzed
                 </span>
               </div>
             )}
+
             {threadCount > 1 && (
-              <div style={{
-                background: "#1f2937",
-                padding: "8px 16px",
-                borderRadius: 8,
-                display: "flex",
-                alignItems: "center",
-                gap: 8
-              }}>
+              <div
+                style={{
+                  background: "#1f2937",
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
                 <span>🧵</span>
                 <span style={{ color: "#d1d5db" }}>
-                  <strong style={{ color: "white" }}>{threadCount}</strong> threads
+                  <strong style={{ color: "white" }}>{threadCount}</strong>{" "}
+                  threads
                 </span>
               </div>
             )}
@@ -1249,6 +1044,7 @@ export default function MainUI({
 
         <Histogram
           data={histogram}
+          threshold={0.2}
           onBinClick={(info) => setBinDetail(info)}
         />
 
@@ -1260,11 +1056,12 @@ export default function MainUI({
               marginTop: 6,
             }}
           >
-            Range: {(binDetail.from * 100).toFixed(0)}% – {(binDetail.to * 100).toFixed(0)}% • Count: {binDetail.count}
+            Range: {(binDetail.from * 100).toFixed(0)}% –{" "}
+            {(binDetail.to * 100).toFixed(0)}% • Count: {binDetail.count}
           </div>
         )}
 
-        {/* ===================== SCROLLABLE FLAGGED COMMENTS ===================== */}
+        {/* Flagged Comments */}
         {topFlagged && topFlagged.length > 0 && (
           <div
             style={{
@@ -1286,42 +1083,6 @@ export default function MainUI({
             >
               🚨 Most Toxic Comments
             </h3>
-
-
-            <div
-              style={{
-                marginBottom: 10,
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() =>
-                  downloadCsv(
-                    topFlagged.map((item, idx) => ({
-                      index: idx + 1,
-                      text: item.text,
-                      score: item.score,
-                      score_percent: (item.score * 100).toFixed(1),
-                    })),
-                    "spottox_flagged_comments.csv"
-                  )
-                }
-                style={{
-                  padding: "6px 10px",
-                  fontSize: 12,
-                  borderRadius: 999,
-                  border: "1px solid #4b5563",
-                  background: "#111827",
-                  color: "white",
-                  cursor: "pointer",
-                }}
-              >
-                💾 Export visible flagged as CSV
-              </button>
-            </div>
 
             {topFlagged.map((item, idx) => (
               <div
