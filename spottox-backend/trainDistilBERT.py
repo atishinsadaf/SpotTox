@@ -267,7 +267,7 @@ def main():
     parser.add_argument(
         "--max_length",
         type=int,
-        default=128,
+        default=256,
         help="Max sequence length.",
     )
     parser.add_argument(
@@ -279,7 +279,7 @@ def main():
     parser.add_argument(
         "--epochs",
         type=int,
-        default=3,
+        default=5,
         help="Number of training epochs.",
     )
     parser.add_argument(
