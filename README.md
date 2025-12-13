@@ -1,70 +1,57 @@
-# Getting Started with Create React App
+# SpotTox
+# Overview
+SpotTox is an ML/AI-powered web application designed to analyze online conversations and detect 
+toxic or harmful language. The system allows users to upload conversation threads, 
+select a machine learning model, and receive toxicity scores along with visual summaries. 
+SpotTox is built to be simple and accessible for general users who want to evaluate toxicity 
+without advanced technical knowledge.
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+# Team
+- **Krisha Patel**
+- **Atishin Sadaf**
+- **Makayla Gunter** 
 
-## Available Scripts
+# Features
+- Upload conversation threads in CSV format
+- Analyze entire conversation threads for toxicity
+- Select from trained machine learning models
+- View results through charts and summaries
+- Highlight the most toxic messages in a conversation
+- Web-based interface with no installation required for users
 
-In the project directory, you can run:
+# System Architecture
+SpotTox follows a client–server architecture:
+- Frontend: React (JavaScript) for user interaction and visualization
+- Backend: Flask (Python) for data processing and API handling
+- Machine Learning: PyTorch and Hugging Face Transformers for model training and inference
 
-### `npm start`
+# Technologies Used
+- Frontend: React, JavaScript, HTML, CSS
+- Backend: Python, Flask, Flask-CORS
+- Machine Learning: PyTorch, Hugging Face Transformers
+- NLP Tools: spaCy
+- Development Tools: Visual Studio Code, PyCharm, Git
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+# How It Works
+1. The user uploads a CSV file containing a conversation thread.
+2. The user selects a trained model from a dropdown menu.
+3. The backend preprocesses the text and runs toxicity analysis.
+4. The system aggregates toxicity scores and generates results.
+5. The frontend displays charts, summaries, and flagged messages.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+# Installation and Setup
+# Frontend
 
-### `npm test`
+- npm install
+- npm start
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+# Backend
 
-### `npm run build`
+- git clone https://github.com/atishinsadaf/spottox.git
+- cd spottox-backend
+- python -m venv venv
+- source venv/bin/activate   # Windows: venv\Scripts\activate
+- pip install -r requirements.txt
+- python app.py
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
